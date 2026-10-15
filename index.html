@@ -282,8 +282,6 @@ function rendre() {
   $('#contenu').innerHTML = rendus[e]();
 }
 
-const ICONE_GAUCHE = '<svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M15 6l-6 6 6 6"/></svg>';
-const ICONE_DROITE = '<svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M9 6l6 6-6 6"/></svg>';
 
 function rendrePrises() {
   const t = dateCourante();
@@ -318,20 +316,15 @@ function rendrePrises() {
   }).join('');
 
   const complet = mgPrevus > 0 && mgPris >= mgPrevus;
-  const precedentPossible = t > premierJour();
-  const suivantPossible = !aujourdhui;
 
   return `
     <section class="section">
-      <div class="jour-nav">
-        <button class="bouton-rond" data-action="jour-precedent" aria-label="Jour précédent" ${precedentPossible ? '' : 'disabled'}>${ICONE_GAUCHE}</button>
-        <div class="carte-principale bulle-centree">
-          <div class="jour">${esc(parseDate(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</div>
-          <div class="chiffre">${mgPris} mg sur ${mgPrevus} mg</div>
-          ${complet ? '<div class="precision">Le traitement du jour est complet.</div>' : ''}
-        </div>
-        <button class="bouton-rond" data-action="jour-suivant" aria-label="Jour suivant" ${suivantPossible ? '' : 'disabled'}>${ICONE_DROITE}</button>
-      </div>
+      <button class="carte-principale bulle-centree bulle-bouton" data-action="choisir-jour" aria-label="Choisir un autre jour">
+        <div class="jour">${esc(parseDate(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>
+        <div class="chiffre">${mgPris} mg sur ${mgPrevus} mg</div>
+        ${complet ? '<div class="precision">Le traitement du jour est complet.</div>' : ''}
+      </button>
+      <input type="date" id="choixJour" value="${t}" min="${premierJour()}" max="${donnees.aujourdhui}" hidden>
       ${dispo ? `<p class="discret" style="text-align:center;margin:10px 0 0">Journée passée, consultation seulement.
         <button class="lien" data-action="jour-aujourdhui">Revenir à aujourd’hui</button></p>` : ''}
     </section>
@@ -612,12 +605,9 @@ function changerStatut(b) {
   });
 }
 
-function changerJour(delta) {
-  const suivant = ajouterJours(dateCourante(), delta);
-  if (suivant > donnees.aujourdhui) return;
-  if (suivant < premierJour()) return;
-  dateVue = suivant === donnees.aujourdhui ? null : suivant;
-  rendre();
+function choisirJour() {
+  const champ = $('#choixJour');
+  if (champ.showPicker) champ.showPicker(); else champ.click();
 }
 
 function ajouterNoteDepuisChamp() {
@@ -640,8 +630,7 @@ function supprimerElement(table, id) {
 
 const ACTIONS_UI = {
   'statut': changerStatut,
-  'jour-precedent': () => changerJour(-1),
-  'jour-suivant': () => changerJour(1),
+  'choisir-jour': choisirJour,
   'jour-aujourdhui': () => { dateVue = null; rendre(); },
   'ajout-stock': ouvrirAjoutStock,
   'modifier-plan': ouvrirModifierPlan,
@@ -687,6 +676,13 @@ $('#contenu').addEventListener('click', e => {
   if (!b || b.disabled) return;
   const f = ACTIONS_UI[b.dataset.action];
   if (f) f(b);
+});
+
+$('#contenu').addEventListener('change', e => {
+  if (e.target.id !== 'choixJour' || !e.target.value) return;
+  const choisi = e.target.value;
+  dateVue = choisi === donnees.aujourdhui ? null : choisi;
+  rendre();
 });
 
 $('#reessayer').addEventListener('click', () => charger());
