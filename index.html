@@ -389,7 +389,7 @@ function rendrePlan() {
     .map(p => `<div class="ligne">
       <span class="libelle"><span>${esc(joliDate(p.date_debut))} · ${MOMENTS[p.moment]}</span>
         <span class="discret" style="display:block">${detail(p.g20, p.g10)} — ${esc(p.motif)}</span></span>
-      <button class="bouton bouton-supprimer" data-action="suppr-plan" data-id="${esc(p.id)}">Supprimer</button>
+      <button class="croix-supprimer" data-action="suppr-plan" data-id="${esc(p.id)}" aria-label="Supprimer ce changement">×</button>
     </div>`).join('');
 
   return `
