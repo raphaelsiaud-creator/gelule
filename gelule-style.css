@@ -674,18 +674,46 @@ dialog * {
   margin-top: 8px;
 }
 
-/* Petite croix rouge pour supprimer une ligne */
-.croix-supprimer {
-  flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  margin-left: 8px;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(207, 90, 80, .12);
-  color: var(--alerte);
-  font: inherit;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
+/* Une ligne par gélule : nombre choisi à droite, Pris / Pas pris dessous */
+.ligne-prise {
+  display: block;
+  padding: 14px 18px;
+}
+.ligne-haut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nom-gelule {
+  font-size: 16px;
+  white-space: nowrap;
+}
+.quantite-choix {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.quantite-choix select.quantite {
+  width: auto;
+  min-width: 72px;
+  min-height: 40px;
+  padding: 6px 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.ligne-bas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+.ligne-bas .segments {
+  display: flex;
+  gap: 8px;
+}
+.ligne-bas .segment {
+  min-width: 96px;
 }

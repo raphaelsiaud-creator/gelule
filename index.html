@@ -203,6 +203,7 @@ async function envoyer(action, args = {}, code = lire(CLE_CODE)) {
   }
   if (!json.ok) {
     if (json.erreur === 'CODE_INVALIDE') throw erreur('Code refusé.', true);
+    if (json.erreur === 'STOCK_INSUFFISANT') throw erreur('Pas assez de gélules dans la réserve pour cette prise.');
     throw erreur('Le serveur n’a pas pu enregistrer. Vos données ont été rechargées.');
   }
   return json.data;
@@ -292,20 +293,32 @@ function rendrePrises() {
 
   const blocs = MOMENTS_LIST.map(m => {
     const plan = planActuel(m, t);
-    if (!plan) return '';
     const lignes = GRAMMAGES_LIST.map(g => {
-      const q = g === 20 ? plan.g20 : plan.g10;
-      if (!q) return '';
+      const prevu = plan ? (g === 20 ? plan.g20 : plan.g10) : 0;
       const prise = donnees.Prises.find(x => x.date === t && x.moment === m && x.grammage === g);
       const statut = prise ? prise.statut : '';
-      mgPrevus += q * g;
-      if (statut === 'pris') mgPris += q * g;
-      return `<div class="ligne${statut === 'pris' ? ' fait' : ''}">
-        <span class="libelle"><span>${q} gélule${q > 1 ? 's' : ''} de ${g} mg</span>
-          <span class="discret" style="display:block">${libelleStatut(statut)}</span></span>
-        <div class="segments">
-          <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="pris" aria-pressed="${statut === 'pris'}" ${dispo ? 'disabled' : ''}>Pris</button>
-          <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="saute" aria-pressed="${statut === 'saute'}" ${dispo ? 'disabled' : ''}>Pas pris</button>
+      const quantite = prise ? prise.quantite : (prevu > 0 ? Math.min(prevu, 5) : 1);
+      mgPrevus += prevu * g;
+      if (statut === 'pris') mgPris += prise.quantite * g;
+      const options = [1, 2, 3, 4, 5].map(n =>
+        `<option value="${n}" ${n === quantite ? 'selected' : ''}>${n}</option>`).join('');
+      let texte = 'À prendre';
+      if (statut === 'pris') texte = `Pris : ${quantite} gélule${quantite > 1 ? 's' : ''}`;
+      if (statut === 'saute') texte = 'Pas pris';
+      const attr = dispo ? 'disabled' : '';
+      return `<div class="ligne ligne-prise${statut === 'pris' ? ' fait' : ''}">
+        <div class="ligne-haut">
+          <span class="nom-gelule">Gélules de ${g} mg</span>
+          <label class="quantite-choix"><span class="discret">Nombre</span>
+            <select class="champ quantite" data-moment="${m}" data-grammage="${g}" ${attr}>${options}</select>
+          </label>
+        </div>
+        <div class="ligne-bas">
+          <span class="discret">${texte}</span>
+          <div class="segments">
+            <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="pris" aria-pressed="${statut === 'pris'}" ${attr}>Pris</button>
+            <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="saute" aria-pressed="${statut === 'saute'}" ${attr}>Pas pris</button>
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -316,7 +329,6 @@ function rendrePrises() {
   }).join('');
 
   const complet = mgPrevus > 0 && mgPris >= mgPrevus;
-
   return `
     <section class="section">
       <button class="carte-principale bulle-centree bulle-bouton" data-action="choisir-jour" aria-label="Choisir un autre jour">
@@ -586,6 +598,19 @@ function ouvrirNouvelleOrdonnance() {
 
 // ---------- Actions de l'utilisateur ----------
 
+// Nombre de gélules choisi : enregistre la prise comme « Pris » avec ce nombre
+function enregistrerQuantite(sel) {
+  if (!estAujourdhui()) return;
+  const t = donnees.aujourdhui;
+  const m = sel.dataset.moment;
+  const g = Number(sel.dataset.grammage);
+  const q = Number(sel.value);
+  enregistrer('enregistrerPrise', { date: t, moment: m, grammage: g, statut: 'pris', quantite: q }, () => {
+    donnees.Prises = donnees.Prises.filter(x => !(x.date === t && x.moment === m && x.grammage === g));
+    donnees.Prises.push({ id: 'tmp-' + m + g + Date.now(), date: t, moment: m, grammage: g, quantite: q, statut: 'pris' });
+  });
+}
+
 // Touche « Pris » ou « Pas pris ». Toucher à nouveau le choix déjà actif l'annule.
 function changerStatut(b) {
   if (!estAujourdhui()) return;
@@ -595,13 +620,11 @@ function changerStatut(b) {
   const demande = b.dataset.statut;
   const actuelle = donnees.Prises.find(x => x.date === t && x.moment === m && x.grammage === g);
   const statut = actuelle && actuelle.statut === demande ? '' : demande;
-  const plan = planActuel(m, t);
-  enregistrer('enregistrerPrise', { date: t, moment: m, grammage: g, statut }, () => {
+  const sel = document.querySelector(`select.quantite[data-moment="${m}"][data-grammage="${g}"]`);
+  const q = sel ? Number(sel.value) : 1;
+  enregistrer('enregistrerPrise', { date: t, moment: m, grammage: g, statut, quantite: q }, () => {
     donnees.Prises = donnees.Prises.filter(x => !(x.date === t && x.moment === m && x.grammage === g));
-    if (statut) {
-      const quantite = plan ? (g === 20 ? plan.g20 : plan.g10) : 0;
-      donnees.Prises.push({ id: 'tmp-' + m + g + Date.now(), date: t, moment: m, grammage: g, quantite, statut });
-    }
+    if (statut) donnees.Prises.push({ id: 'tmp-' + m + g + Date.now(), date: t, moment: m, grammage: g, quantite: q, statut });
   });
 }
 
@@ -683,6 +706,11 @@ $('#contenu').addEventListener('change', e => {
   const choisi = e.target.value;
   dateVue = choisi === donnees.aujourdhui ? null : choisi;
   rendre();
+});
+
+$('#contenu').addEventListener('change', e => {
+  const sel = e.target.closest('select.quantite');
+  if (sel) enregistrerQuantite(sel);
 });
 
 $('#reessayer').addEventListener('click', () => charger());
