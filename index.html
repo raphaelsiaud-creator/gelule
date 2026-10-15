@@ -65,12 +65,11 @@
    Gélule : page (JavaScript sans bibliothèque)
    ========================================================================== */
 
-// À remplacer par l'adresse de votre déploiement Apps Script (se termine par /exec)
 const API = 'https://script.google.com/macros/s/AKfycbwR5xArJMSMdT_j3YHImacqCsWdNAsSMOfuatGHyDUQAIhWSNXTP6pUntLJJDYsFq8/exec';
 
 const CLE_CACHE = 'gelule-cache';
 const CLE_CODE = 'gelule-code';
-const MOMENTS = { matin: 'Matin', soir: 'Soir' };
+const MOMENTS = { matin: 'Matin', soir: 'Après-midi' };
 const MOMENTS_LIST = ['matin', 'soir'];
 const GRAMMAGES_LIST = [20, 10];
 const TITRES = { prises: 'Mes prises', reserve: 'Ma réserve', plan: 'Mon plan', suivi: 'Mon suivi médical' };
@@ -80,6 +79,7 @@ let donnees = null;
 let derniereMaj = 0;
 let dernierChargement = 0;
 let file = Promise.resolve();
+let dateVue = null; // null = aujourd'hui
 
 const $ = s => document.querySelector(s);
 
@@ -114,6 +114,12 @@ function joursEntre(a, b) {
 }
 function joliDate(s) {
   return parseDate(s).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+function dateCourante() {
+  return dateVue || donnees.aujourdhui;
+}
+function estAujourdhui() {
+  return dateCourante() === donnees.aujourdhui;
 }
 
 // ---------- Calculs (à partir des données du Sheet) ----------
@@ -154,11 +160,20 @@ function joursRestants() {
   });
   return min === Infinity ? null : min;
 }
-function mgDe(q, g) { return q * g; }
+function premierJour() {
+  const dates = donnees.Prescriptions.map(p => p.date_debut).sort();
+  return dates.length ? dates[0] : donnees.aujourdhui;
+}
 function libelleStatut(s) {
   if (s === 'pris') return 'Pris';
-  if (s === 'saute') return 'Pas pris (noté dans le suivi)';
+  if (s === 'saute') return 'Pas pris';
   return 'À prendre';
+}
+function detail(g20, g10) {
+  const m = [];
+  if (g20) m.push(g20 + ' × 20 mg');
+  if (g10) m.push(g10 + ' × 10 mg');
+  return m.join(' + ') || 'Rien';
 }
 
 // ---------- Communication avec le serveur ----------
@@ -267,11 +282,15 @@ function rendre() {
   $('#contenu').innerHTML = rendus[e]();
 }
 
+const ICONE_GAUCHE = '<svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M15 6l-6 6 6 6"/></svg>';
+const ICONE_DROITE = '<svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M9 6l6 6-6 6"/></svg>';
+
 function rendrePrises() {
-  const t = donnees.aujourdhui;
+  const t = dateCourante();
+  const aujourdhui = estAujourdhui();
+  const dispo = !aujourdhui;
   let mgPrevus = 0;
   let mgPris = 0;
-  let passees = 0;
 
   const blocs = MOMENTS_LIST.map(m => {
     const plan = planActuel(m, t);
@@ -281,17 +300,14 @@ function rendrePrises() {
       if (!q) return '';
       const prise = donnees.Prises.find(x => x.date === t && x.moment === m && x.grammage === g);
       const statut = prise ? prise.statut : '';
-      mgPrevus += mgDe(q, g);
-      if (statut === 'pris') mgPris += mgDe(q, g);
-      if (statut === 'saute') passees += 1;
-      const pressePris = statut === 'pris' ? 'true' : 'false';
-      const presseSaute = statut === 'saute' ? 'true' : 'false';
+      mgPrevus += q * g;
+      if (statut === 'pris') mgPris += q * g;
       return `<div class="ligne${statut === 'pris' ? ' fait' : ''}">
         <span class="libelle"><span>${q} gélule${q > 1 ? 's' : ''} de ${g} mg</span>
           <span class="discret" style="display:block">${libelleStatut(statut)}</span></span>
         <div class="segments">
-          <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="pris" aria-pressed="${pressePris}">Pris</button>
-          <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="saute" aria-pressed="${presseSaute}">Pas pris</button>
+          <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="pris" aria-pressed="${statut === 'pris'}" ${dispo ? 'disabled' : ''}>Pris</button>
+          <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="saute" aria-pressed="${statut === 'saute'}" ${dispo ? 'disabled' : ''}>Pas pris</button>
         </div>
       </div>`;
     }).join('');
@@ -302,17 +318,22 @@ function rendrePrises() {
   }).join('');
 
   const complet = mgPrevus > 0 && mgPris >= mgPrevus;
+  const precedentPossible = t > premierJour();
+  const suivantPossible = !aujourdhui;
+
   return `
     <section class="section">
-      <div class="carte-principale">
-        <div style="opacity:.75">Aujourd’hui, ${esc(joliDate(t))}</div>
-        <div class="grand-chiffre" style="margin-top:6px">${mgPris} mg sur ${mgPrevus} mg</div>
-        <div style="opacity:.75;margin-top:6px">${complet
-          ? 'Le traitement du jour est complet.'
-          : passees > 0
-            ? `${passees} prise${passees > 1 ? 's' : ''} non prise${passees > 1 ? 's' : ''} aujourd’hui, bien notée${passees > 1 ? 's' : ''}.`
-            : 'Touchez « Pris » ou « Pas pris » pour chaque ligne.'}</div>
+      <div class="jour-nav">
+        <button class="bouton-rond" data-action="jour-precedent" aria-label="Jour précédent" ${precedentPossible ? '' : 'disabled'}>${ICONE_GAUCHE}</button>
+        <div class="carte-principale bulle-centree">
+          <div class="jour">${esc(parseDate(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</div>
+          <div class="chiffre">${mgPris} mg sur ${mgPrevus} mg</div>
+          ${complet ? '<div class="precision">Le traitement du jour est complet.</div>' : ''}
+        </div>
+        <button class="bouton-rond" data-action="jour-suivant" aria-label="Jour suivant" ${suivantPossible ? '' : 'disabled'}>${ICONE_DROITE}</button>
       </div>
+      ${dispo ? `<p class="discret" style="text-align:center;margin:10px 0 0">Journée passée, consultation seulement.
+        <button class="lien" data-action="jour-aujourdhui">Revenir à aujourd’hui</button></p>` : ''}
     </section>
     ${blocs || '<p class="discret">Aucun plan en cours.</p>'}`;
 }
@@ -340,8 +361,8 @@ function rendreReserve() {
 
   return `
     <section class="section">
-      <div class="carte-principale">
-        <div style="opacity:.85">${esc(phrase)}</div>
+      <div class="carte-principale bulle-centree">
+        <div>${esc(phrase)}</div>
       </div>
     </section>
     <section class="section">
@@ -358,13 +379,6 @@ function rendreReserve() {
     </section>`;
 }
 
-function detail(g20, g10) {
-  const m = [];
-  if (g20) m.push(g20 + ' × 20 mg');
-  if (g10) m.push(g10 + ' × 10 mg');
-  return m.join(' + ') || 'Rien';
-}
-
 function rendrePlan() {
   const t = donnees.aujourdhui;
   const lignes = MOMENTS_LIST.map(m => {
@@ -378,10 +392,11 @@ function rendrePlan() {
 
   const historique = donnees.Plans.slice()
     .sort((a, b) => (a.date_debut < b.date_debut ? 1 : -1))
-    .slice(0, 10)
+    .slice(0, 20)
     .map(p => `<div class="ligne">
       <span class="libelle"><span>${esc(joliDate(p.date_debut))} · ${MOMENTS[p.moment]}</span>
         <span class="discret" style="display:block">${detail(p.g20, p.g10)} — ${esc(p.motif)}</span></span>
+      <button class="bouton bouton-supprimer" data-action="suppr-plan" data-id="${esc(p.id)}">Supprimer</button>
     </div>`).join('');
 
   return `
@@ -427,7 +442,7 @@ function rendreSuivi() {
 
   const sautees = donnees.Prises.filter(x => x.statut === 'saute')
     .sort((a, b) => (a.date < b.date ? 1 : -1))
-    .slice(0, 10)
+    .slice(0, 20)
     .map(x => `<div class="ligne">
       <span class="libelle"><span>${esc(joliDate(x.date))} · ${MOMENTS[x.moment]}</span>
         <span class="discret" style="display:block">${x.quantite} gélule${x.quantite > 1 ? 's' : ''} de ${x.grammage} mg non prise${x.quantite > 1 ? 's' : ''}</span></span>
@@ -478,10 +493,10 @@ function ouvrirFormulaire(titre, champs, valider) {
   }).join('');
 
   $('#dlgContenu').innerHTML = `
-    <h2 style="font-size:18px;font-weight:600;margin:0 0 16px">${esc(titre)}</h2>
+    <h2 style="font-size:18px;font-weight:600;margin:0 0 16px;text-align:center">${esc(titre)}</h2>
     <form id="fdlg">
       ${html}
-      <p id="erreurDlg" class="discret" style="color:var(--alerte);min-height:18px"></p>
+      <p id="erreurDlg" class="discret" style="color:var(--alerte);min-height:18px;text-align:center"></p>
       <div style="display:flex;gap:10px">
         <button type="button" class="bouton bouton-secondaire" id="annuler" style="flex:1">Annuler</button>
         <button class="bouton bouton-principal" style="flex:1">Enregistrer</button>
@@ -528,8 +543,8 @@ function ouvrirModifierPlan() {
   ouvrirFormulaire('Modifier le plan', [
     { nom: 'm20', label: 'Matin : gélules de 20 mg', inputmode: 'numeric', valeur: pm.g20 },
     { nom: 'm10', label: 'Matin : gélules de 10 mg', inputmode: 'numeric', valeur: pm.g10 },
-    { nom: 's20', label: 'Soir : gélules de 20 mg', inputmode: 'numeric', valeur: ps.g20 },
-    { nom: 's10', label: 'Soir : gélules de 10 mg', inputmode: 'numeric', valeur: ps.g10 },
+    { nom: 's20', label: 'Après-midi : gélules de 20 mg', inputmode: 'numeric', valeur: ps.g20 },
+    { nom: 's10', label: 'Après-midi : gélules de 10 mg', inputmode: 'numeric', valeur: ps.g10 },
     { nom: 'date', label: 'À partir du', type: 'date', valeur: t },
     { nom: 'motif', label: 'Pourquoi ce changement' },
     { nom: 'auteur', label: 'Décidé par' }
@@ -580,6 +595,7 @@ function ouvrirNouvelleOrdonnance() {
 
 // Touche « Pris » ou « Pas pris ». Toucher à nouveau le choix déjà actif l'annule.
 function changerStatut(b) {
+  if (!estAujourdhui()) return;
   const t = donnees.aujourdhui;
   const m = b.dataset.moment;
   const g = Number(b.dataset.grammage);
@@ -594,6 +610,14 @@ function changerStatut(b) {
       donnees.Prises.push({ id: 'tmp-' + m + g + Date.now(), date: t, moment: m, grammage: g, quantite, statut });
     }
   });
+}
+
+function changerJour(delta) {
+  const suivant = ajouterJours(dateCourante(), delta);
+  if (suivant > donnees.aujourdhui) return;
+  if (suivant < premierJour()) return;
+  dateVue = suivant === donnees.aujourdhui ? null : suivant;
+  rendre();
 }
 
 function ajouterNoteDepuisChamp() {
@@ -616,12 +640,16 @@ function supprimerElement(table, id) {
 
 const ACTIONS_UI = {
   'statut': changerStatut,
+  'jour-precedent': () => changerJour(-1),
+  'jour-suivant': () => changerJour(1),
+  'jour-aujourdhui': () => { dateVue = null; rendre(); },
   'ajout-stock': ouvrirAjoutStock,
   'modifier-plan': ouvrirModifierPlan,
   'nouvelle-ordonnance': ouvrirNouvelleOrdonnance,
   'ajout-note': ajouterNoteDepuisChamp,
   'suppr-note': b => supprimerElement('Notes', b.dataset.id),
-  'suppr-stock': b => supprimerElement('Stock', b.dataset.id)
+  'suppr-stock': b => supprimerElement('Stock', b.dataset.id),
+  'suppr-plan': b => supprimerElement('Plans', b.dataset.id)
 };
 
 // ---------- Démarrage et événements ----------
@@ -656,13 +684,13 @@ $('#formCode').addEventListener('submit', async e => {
 
 $('#contenu').addEventListener('click', e => {
   const b = e.target.closest('[data-action]');
-  if (!b) return;
+  if (!b || b.disabled) return;
   const f = ACTIONS_UI[b.dataset.action];
   if (f) f(b);
 });
 
 $('#reessayer').addEventListener('click', () => charger());
-window.addEventListener('hashchange', rendre);
+window.addEventListener('hashchange', () => { dateVue = null; rendre(); });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && donnees && Date.now() - derniereMaj > 30000 && !$('#dlg').open) {
     charger();
