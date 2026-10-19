@@ -69,6 +69,7 @@ const API = 'https://script.google.com/macros/s/AKfycbwR5xArJMSMdT_j3YHImacqCsWd
 
 const CLE_CACHE = 'gelule-cache';
 const CLE_CODE = 'gelule-code';
+const TAILLE_MAX_DOC = 10 * 1024 * 1024;
 const MOMENTS = { matin: 'Matin', soir: 'Après-midi' };
 const MOMENTS_LIST = ['matin', 'soir'];
 const GRAMMAGES_LIST = [20, 10];
@@ -164,6 +165,12 @@ function premierJour() {
   const dates = donnees.Prescriptions.map(p => p.date_debut).sort();
   return dates.length ? dates[0] : donnees.aujourdhui;
 }
+// Dernier rendez-vous saisi, à partir d'aujourd'hui
+function prochainRdv() {
+  const t = donnees.aujourdhui;
+  const futurs = (donnees.RendezVous || []).filter(r => r.date >= t);
+  return futurs.length ? futurs[futurs.length - 1].date : null;
+}
 function libelleStatut(s) {
   if (s === 'pris') return 'Pris';
   if (s === 'saute') return 'Pas pris';
@@ -204,6 +211,8 @@ async function envoyer(action, args = {}, code = lire(CLE_CODE)) {
   if (!json.ok) {
     if (json.erreur === 'CODE_INVALIDE') throw erreur('Code refusé.', true);
     if (json.erreur === 'STOCK_INSUFFISANT') throw erreur('Pas assez de gélules dans la réserve pour cette prise.');
+    if (json.erreur === 'TYPE_NON_ACCEPTE') throw erreur('Format non accepté : choisissez une photo ou un PDF.');
+    if (json.erreur === 'FICHIER_TROP_GROS') throw erreur('Fichier trop volumineux (10 Mo maximum).');
     throw erreur('Le serveur n’a pas pu enregistrer. Vos données ont été rechargées.');
   }
   return json.data;
@@ -331,12 +340,14 @@ function rendrePrises() {
   const complet = mgPrevus > 0 && mgPris >= mgPrevus;
   return `
     <section class="section">
-      <button class="carte-principale bulle-centree bulle-bouton" data-action="choisir-jour" aria-label="Choisir un autre jour">
-        <div class="jour">${esc(parseDate(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>
-        <div class="chiffre">${mgPris} mg sur ${mgPrevus} mg</div>
-        ${complet ? '<div class="precision">Le traitement du jour est complet.</div>' : ''}
-      </button>
-      <input type="date" id="choixJour" value="${t}" min="${premierJour()}" max="${donnees.aujourdhui}" hidden>
+      <div class="bulle-wrap">
+        <div class="carte-principale bulle-centree bulle-bouton">
+          <div class="jour">${esc(parseDate(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>
+          <div class="chiffre">${mgPris} mg sur ${mgPrevus} mg</div>
+          ${complet ? '<div class="precision">Le traitement du jour est complet.</div>' : ''}
+        </div>
+        <input type="date" id="choixJour" class="choix-date" value="${t}" min="${premierJour()}" max="${donnees.aujourdhui}" aria-label="Choisir un autre jour">
+      </div>
       ${dispo ? `<p class="discret" style="text-align:center;margin:10px 0 0">Journée passée, consultation seulement.
         <button class="lien" data-action="jour-aujourdhui">Revenir à aujourd’hui</button></p>` : ''}
     </section>
@@ -346,34 +357,55 @@ function rendrePrises() {
 function rendreReserve() {
   const t = donnees.aujourdhui;
   const jr = joursRestants();
-  let phrase = 'Aucun plan en cours.';
-  if (jr === 0) phrase = 'Il ne vous reste plus de gélules pour le traitement.';
-  else if (jr !== null) phrase = `Il vous reste ${jr} jour${jr > 1 ? 's' : ''} de traitement, jusqu’au ${joliDate(ajouterJours(t, jr - 1))}.`;
+  const rdv = prochainRdv();
+  const fin = jr !== null && jr > 0 ? ajouterJours(t, jr - 1) : t;
 
-  const lignes = GRAMMAGES_LIST.map(g => `
-    <div class="ligne">
-      <span class="libelle">Gélules de ${g} mg</span>
+  const lignesBulle = [];
+  if (jr === null) lignesBulle.push('Aucun plan en cours.');
+  else if (jr === 0) lignesBulle.push('Il ne vous reste plus de gélules pour le traitement.');
+  else lignesBulle.push(`Il vous reste ${jr} jour${jr > 1 ? 's' : ''} de traitement, jusqu’au ${joliDate(fin)}.`);
+
+  if (rdv === null) {
+    lignesBulle.push('Indiquez la date de votre prochain rendez-vous dans Suivi médical.');
+  } else if (jr !== null && rdv > fin) {
+    const sans = Math.max(joursEntre(fin, rdv) - 1, 0);
+    lignesBulle.push(`Sans traitement pendant ${sans} jour${sans > 1 ? 's' : ''}, avant le rendez-vous du ${joliDate(rdv)}.`);
+  } else {
+    lignesBulle.push(`Prochain rendez-vous : ${joliDate(rdv)}.`);
+  }
+
+  const besoin = rdv ? Math.max(joursEntre(t, rdv), 0) : null;
+  const lignes = GRAMMAGES_LIST.map(g => {
+    let info = '';
+    if (besoin !== null) {
+      const manque = Math.max(parJour(g) * besoin - reste(g), 0);
+      info = manque > 0
+        ? `<span class="manque">Il manque ${manque} gélule${manque > 1 ? 's' : ''} pour tenir jusqu’au rendez-vous</span>`
+        : '<span class="discret">Assez pour tenir jusqu’au rendez-vous</span>';
+    }
+    return `<div class="ligne">
+      <span class="libelle"><span>Gélules de ${g} mg</span>${info ? `<span style="display:block">${info}</span>` : ''}</span>
       <span class="grand-chiffre">${reste(g)}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   const recents = donnees.Stock.slice().sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10)
     .map(s => `
       <div class="ligne">
         <span class="libelle"><span>${s.quantite} gélules de ${s.grammage} mg</span>
           <span class="discret" style="display:block">${esc(joliDate(s.date))} · ${esc(s.motif)}</span></span>
-        <button class="bouton bouton-supprimer" data-action="suppr-stock" data-id="${esc(s.id)}">Supprimer</button>
+        <button class="croix-supprimer" data-action="suppr-stock" data-id="${esc(s.id)}" aria-label="Supprimer cet ajout">×</button>
       </div>`).join('');
 
   return `
     <section class="section">
       <div class="carte-principale bulle-centree">
-        <div>${esc(phrase)}</div>
+        ${lignesBulle.map(l => `<div class="ligne-bulle">${esc(l)}</div>`).join('')}
       </div>
     </section>
     <section class="section">
       <h2 class="titre-section">Dans la boîte</h2>
       <div class="liste">${lignes}</div>
-      <p class="discret" style="margin:8px 4px 0">Chaque prise marquée « Pris » retire automatiquement les gélules correspondantes.</p>
     </section>
     <section class="section">
       <button class="bouton bouton-principal" style="width:100%" data-action="ajout-stock">Ajouter des gélules</button>
@@ -412,13 +444,14 @@ function rendrePlan() {
     </section>
     <section class="section">
       <h2 class="titre-section">Historique des changements</h2>
-      <div class="liste">${historique || '<div class="ligne discret">Aucun changement.</div>'}</div>
+      <div class="carte carte-sans-marge">${historique || '<div class="ligne discret">Aucun changement.</div>'}</div>
     </section>`;
 }
 
 function rendreSuivi() {
   const t = donnees.aujourdhui;
   const p = prescriptionActuelle();
+  const rdv = prochainRdv();
   let bloc = '<p class="discret">Aucune ordonnance enregistrée.</p>';
 
   if (p) {
@@ -438,12 +471,19 @@ function rendreSuivi() {
     bloc = `
       <div class="carte">
         <div style="font-weight:600">Ordonnance en cours</div>
-        <p class="discret" style="margin:6px 0 0">Du ${esc(joliDate(p.date_debut))} au ${esc(joliDate(fin))}</p>
         <p style="margin:6px 0 0">${p.g20} gélules de 20 mg et ${p.g10} gélules de 10 mg, pour ${p.duree} jours.</p>
         <p style="margin:12px 0 0">${esc(rappel)}</p>
         <button class="bouton bouton-secondaire" style="width:100%;margin-top:14px" data-action="nouvelle-ordonnance">Ajouter une nouvelle ordonnance</button>
       </div>`;
   }
+
+  const docs = (donnees.Documents || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1))
+    .map(d => `<div class="ligne">
+      <a class="libelle lien-doc" href="https://drive.google.com/file/d/${esc(d.fichier)}/view" target="_blank" rel="noopener">
+        <span>${esc(d.nom)}</span><span class="discret" style="display:block">${esc(joliDate(d.date))}</span>
+      </a>
+      <button class="croix-supprimer" data-action="suppr-doc" data-id="${esc(d.id)}" aria-label="Supprimer ce document">×</button>
+    </div>`).join('');
 
   const sautees = donnees.Prises.filter(x => x.statut === 'saute')
     .sort((a, b) => (a.date < b.date ? 1 : -1))
@@ -457,13 +497,29 @@ function rendreSuivi() {
     .map(n => `<div class="ligne" style="align-items:flex-start">
       <span class="libelle"><span style="white-space:pre-wrap">${esc(n.texte)}</span>
         <span class="discret" style="display:block">${esc(joliDate(n.date))}</span></span>
-      <button class="bouton bouton-supprimer" data-action="suppr-note" data-id="${esc(n.id)}">Supprimer</button>
+      <button class="croix-supprimer" data-action="suppr-note" data-id="${esc(n.id)}" aria-label="Supprimer cette note">×</button>
     </div>`).join('');
 
   return `
     <section class="section">
       <h2 class="titre-section">Ordonnance</h2>
       ${bloc}
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Prochain rendez-vous</h2>
+      <div class="carte">
+        <div style="font-weight:600">${rdv ? esc(joliDate(rdv)) : 'Pas encore indiqué'}</div>
+        <button class="bouton bouton-secondaire" style="width:100%;margin-top:14px" data-action="ajout-rdv">${rdv ? 'Modifier la date' : 'Indiquer la date du rendez-vous'}</button>
+      </div>
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Document de l'ordonnance</h2>
+      <div class="liste">${docs || '<div class="ligne discret">Aucun document pour le moment.</div>'}</div>
+      <label class="bouton bouton-principal fichier-label" style="width:100%;margin-top:12px">
+        Ajouter une photo ou un document
+        <input type="file" id="fichierDoc" class="fichier-cache" accept="image/*,application/pdf">
+      </label>
+      <p id="infoDoc" class="discret" style="text-align:center;margin:8px 0 0" hidden></p>
     </section>
     <section class="section">
       <h2 class="titre-section">Prises non prises (suivi)</h2>
@@ -518,6 +574,20 @@ function ouvrirFormulaire(titre, champs, valider) {
     dlg.close();
   };
   dlg.showModal();
+}
+
+function ouvrirRdv() {
+  const rdv = prochainRdv();
+  ouvrirFormulaire('Prochain rendez-vous', [
+    { nom: 'date', label: 'Date du rendez-vous', type: 'date', valeur: rdv || donnees.aujourdhui },
+    { nom: 'note', label: 'Note (facultatif)' }
+  ], v => {
+    if (!v.date) return 'Indiquez la date du rendez-vous.';
+    enregistrer('ajouterRdv', { date: v.date, note: v.note.trim() }, () => {
+      donnees.RendezVous = donnees.RendezVous || [];
+      donnees.RendezVous.push({ id: 'tmp-' + Date.now(), date: v.date, note: v.note.trim() });
+    });
+  });
 }
 
 function ouvrirAjoutStock() {
@@ -633,6 +703,54 @@ function choisirJour() {
   if (champ.showPicker) champ.showPicker(); else champ.click();
 }
 
+// Lit un fichier et le prépare : photo réduite en JPEG, PDF tel quel
+function preparerFichier(f) {
+  if (f.size > TAILLE_MAX_DOC) return Promise.reject(new Error('Fichier trop volumineux (10 Mo maximum).'));
+  if (f.type === 'application/pdf') {
+    return new Promise((res, rej) => {
+      const lecteur = new FileReader();
+      lecteur.onload = () => res({ type: 'application/pdf', base64: lecteur.result.split(',')[1] });
+      lecteur.onerror = () => rej(new Error('Fichier illisible.'));
+      lecteur.readAsDataURL(f);
+    });
+  }
+  if (!f.type.startsWith('image/')) return Promise.reject(new Error('Format non accepté : choisissez une photo ou un PDF.'));
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(f);
+    img.onload = () => {
+      const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res({ type: 'image/jpeg', base64: c.toDataURL('image/jpeg', 0.85).split(',')[1] });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Image illisible.')); };
+    img.src = url;
+  });
+}
+
+async function envoyerDocument(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const info = $('#infoDoc');
+  info.textContent = 'Envoi en cours…';
+  info.hidden = false;
+  try {
+    const { type, base64 } = await preparerFichier(f);
+    await appeler('ajouterDocument', { date: donnees.aujourdhui, nom: f.name, type, contenu: base64 });
+    info.hidden = true;
+    input.value = '';
+    await charger();
+  } catch (e) {
+    info.hidden = true;
+    afficherErreur(e.message || 'Envoi impossible.');
+    input.value = '';
+  }
+}
+
 function ajouterNoteDepuisChamp() {
   const champ = $('#champNote');
   const texte = champ.value.trim();
@@ -652,6 +770,8 @@ function supprimerElement(table, id) {
 }
 
 const ACTIONS_UI = {
+  'ajout-rdv': ouvrirRdv,
+  'suppr-doc': b => supprimerElement('Documents', b.dataset.id),
   'statut': changerStatut,
   'choisir-jour': choisirJour,
   'jour-aujourdhui': () => { dateVue = null; rendre(); },
@@ -702,6 +822,7 @@ $('#contenu').addEventListener('click', e => {
 });
 
 $('#contenu').addEventListener('change', e => {
+  if (e.target.id === 'fichierDoc') { envoyerDocument(e.target); return; }
   if (e.target.id !== 'choixJour' || !e.target.value) return;
   const choisi = e.target.value;
   dateVue = choisi === donnees.aujourdhui ? null : choisi;

@@ -717,3 +717,87 @@ dialog * {
 .ligne-bas .segment {
   min-width: 96px;
 }
+
+/* Calendrier de Mes prises : le sélecteur natif recouvre la bulle (fonctionne sur iPhone) */
+.bulle-wrap {
+  position: relative;
+}
+.choix-date {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  font-size: 16px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Réserve : lignes de la bulle */
+.ligne-bulle + .ligne-bulle {
+  margin-top: 12px;
+}
+.manque {
+  color: var(--alerte);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Mon plan : anciens plans dans une seule bulle */
+.carte-sans-marge {
+  padding: 6px 0;
+}
+.carte-sans-marge .ligne {
+  padding-left: 20px;
+  padding-right: 14px;
+}
+
+/* Ordonnance : bouton d'ajout de fichier */
+.fichier-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  text-align: center;
+}
+.fichier-cache {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lien-doc {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Petite croix rouge pour supprimer une ligne */
+.croix-supprimer {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  margin-left: 8px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(207, 90, 80, .12);
+  color: var(--alerte);
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Bouton d'ajout de document : tient dans l'écran */
+.fichier-label {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 16px;
+  white-space: normal;
+  line-height: 1.25;
+}
