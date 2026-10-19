@@ -801,3 +801,10 @@ dialog * {
   white-space: normal;
   line-height: 1.25;
 }
+
+/* La bulle du jour reste dans l'écran et centrée */
+.bulle-centree,
+.bulle-bouton {
+  box-sizing: border-box;
+  width: 100%;
+}
