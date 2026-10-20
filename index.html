@@ -14,6 +14,35 @@
 <link rel="stylesheet" href="gelule-style.css">
 <style>
 [hidden]{display:none!important}
+/* Allègement visuel */
+:root {
+  --ombre: 0 4px 16px rgba(52, 78, 68, .05), inset 0 1px 0 rgba(255, 255, 255, .8);
+  --verre: rgba(255, 255, 255, .68);
+  --verre-bord: rgba(255, 255, 255, .6);
+}
+body { font-size: 15px; }
+.titre-section { font-size: 11px; margin-bottom: 6px; }
+.titre-ecran { font-size: 22px; }
+.carte, .carte-principale { padding: 16px; border-radius: 20px; }
+.carte-principale {
+  background: linear-gradient(155deg, rgba(214, 240, 228, .9), rgba(196, 230, 214, .75));
+  box-shadow: 0 6px 18px rgba(63, 140, 117, .10);
+}
+.liste { border-radius: 20px; }
+.ligne { min-height: 48px; padding: 12px 16px; }
+.ligne-prise { padding: 12px 16px; }
+.ligne .libelle, .nom-gelule { font-size: 15px; }
+.grand-chiffre { font-size: 18px; }
+.bulle-centree .chiffre { font-size: clamp(20px, 6.5vw, 26px); font-weight: 600; }
+.bulle-centree .jour { font-size: 15px; font-weight: 500; }
+.segment { min-height: 36px; font-size: 13px; font-weight: 500; border-width: 1px; }
+.segment[data-statut="pris"][aria-pressed="true"] { background: #4f9c84; border-color: #4f9c84; }
+.bouton { min-height: 46px; font-size: 15px; font-weight: 500; box-shadow: none; }
+.bouton-principal { box-shadow: 0 4px 12px rgba(63, 140, 117, .18); }
+.onglet { font-size: 10px; }
+.barre-onglets { box-shadow: 0 6px 18px rgba(52, 78, 68, .06); }
+.croix-supprimer { width: 30px; height: 30px; font-size: 18px; }
+
 /* Bulle du jour et calendrier : rappelés ici pour ne pas dépendre du cache du CSS */
 .bulle-wrap{position:relative;width:100%}
 .bulle-wrap .bulle-centree{box-sizing:border-box;width:100%}
@@ -167,6 +196,16 @@ function joursRestants() {
   });
   return min === Infinity ? null : min;
 }
+// Le jour de la consultation est compté : la médication est prise ce jour-là
+function joursAffiches() {
+  const jr = joursRestants();
+  return jr === null ? null : jr + 1;
+}
+// Jours de sécurité choisis par l'utilisateur (0 par défaut)
+function joursSecurite() {
+  const r = (donnees.Reglages || []).find(x => x.cle === 'jours_securite');
+  return r ? r.valeur : 0;
+}
 function premierJour() {
   const dates = donnees.Prescriptions.map(p => p.date_debut).sort();
   return dates.length ? dates[0] : donnees.aujourdhui;
@@ -231,11 +270,18 @@ function appeler(action, args) {
   return r;
 }
 
+// Compteur des modifications envoyées : une lecture commencée avant une modification
+// ne doit pas écraser l'affichage avec un état plus ancien
+let compteurEcritures = 0;
+let ecrituresEnCours = 0;
+
 async function charger() {
   const id = ++dernierChargement;
+  const versionAvant = compteurEcritures;
   try {
     const d = await appeler('donnees');
     if (id !== dernierChargement) return; // un chargement plus récent a été lancé
+    if (compteurEcritures !== versionAvant) return; // une modification a eu lieu entre-temps
     donnees = d;
     derniereMaj = Date.now();
     ecrire(CLE_CACHE, JSON.stringify(d));
@@ -253,17 +299,28 @@ async function charger() {
   }
 }
 
-// Mise à jour optimiste, puis enregistrement ; en cas d'échec, rechargement
+// Mise à jour optimiste, puis enregistrement. Une fois toutes les modifications
+// envoyées, l'état réel est relu depuis le serveur. En cas d'échec, rechargement.
 async function enregistrer(action, args, appliquer) {
+  compteurEcritures++;
+  ecrituresEnCours++;
   if (appliquer) appliquer();
   rendre();
+  let ok = true;
   try {
     await appeler(action, args);
   } catch (e) {
+    ok = false;
     afficherErreur(e.message);
-    if (e.codeInvalide) { ecrire(CLE_CODE, ''); montrerAccueil('Code refusé. Entrez-le à nouveau.'); return; }
-    await charger();
+    if (e.codeInvalide) {
+      ecrituresEnCours--;
+      ecrire(CLE_CODE, '');
+      montrerAccueil('Code refusé. Entrez-le à nouveau.');
+      return;
+    }
   }
+  ecrituresEnCours--;
+  if (!ok || ecrituresEnCours === 0) await charger();
 }
 
 function afficherErreur(texte) {
@@ -308,20 +365,19 @@ function rendrePrises() {
 
   const blocs = MOMENTS_LIST.map(m => {
     const plan = planActuel(m, t);
+    if (!plan) return '';
     const lignes = GRAMMAGES_LIST.map(g => {
-      const prevu = plan ? (g === 20 ? plan.g20 : plan.g10) : 0;
+      const prevu = g === 20 ? plan.g20 : plan.g10;
+      if (!prevu) return ''; // seulement les gélules prévues par le plan
       const prise = donnees.Prises.find(x => x.date === t && x.moment === m && x.grammage === g);
-      const statut = prise ? prise.statut : '';
-      const quantite = prise ? prise.quantite : (prevu > 0 ? Math.min(prevu, 5) : 1);
+      const pris = !!(prise && prise.statut === 'pris');
+      const quantite = pris ? prise.quantite : Math.min(prevu, 5);
       mgPrevus += prevu * g;
-      if (statut === 'pris') mgPris += prise.quantite * g;
+      if (pris) mgPris += prise.quantite * g;
       const options = [1, 2, 3, 4, 5].map(n =>
         `<option value="${n}" ${n === quantite ? 'selected' : ''}>${n}</option>`).join('');
-      let texte = 'À prendre';
-      if (statut === 'pris') texte = `Pris : ${quantite} gélule${quantite > 1 ? 's' : ''}`;
-      if (statut === 'saute') texte = 'Pas pris';
       const attr = dispo ? 'disabled' : '';
-      return `<div class="ligne ligne-prise${statut === 'pris' ? ' fait' : ''}">
+      return `<div class="ligne ligne-prise${pris ? ' fait' : ''}">
         <div class="ligne-haut">
           <span class="nom-gelule">Gélules de ${g} mg</span>
           <label class="quantite-choix"><span class="discret">Nombre</span>
@@ -329,10 +385,9 @@ function rendrePrises() {
           </label>
         </div>
         <div class="ligne-bas">
-          <span class="discret">${texte}</span>
+          <span class="discret">${pris ? `Pris : ${quantite} gélule${quantite > 1 ? 's' : ''}` : 'À prendre'}</span>
           <div class="segments">
-            <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="pris" aria-pressed="${statut === 'pris'}" ${attr}>Pris</button>
-            <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="saute" aria-pressed="${statut === 'saute'}" ${attr}>Pas pris</button>
+            <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="pris" aria-pressed="${pris}" ${attr}>Pris</button>
           </div>
         </div>
       </div>`;
@@ -362,8 +417,9 @@ function rendrePrises() {
 
 function rendreReserve() {
   const t = donnees.aujourdhui;
-  const jr = joursRestants();
+  const jr = joursAffiches();
   const rdv = prochainRdv();
+  const securite = joursSecurite();
   const fin = jr !== null && jr > 0 ? ajouterJours(t, jr - 1) : t;
 
   const lignesBulle = [];
@@ -380,7 +436,8 @@ function rendreReserve() {
     lignesBulle.push(`Prochain rendez-vous : ${joliDate(rdv)}.`);
   }
 
-  const besoin = rdv ? Math.max(joursEntre(t, rdv), 0) : null;
+  // Jours à couvrir jusqu'au rendez-vous (jour compris), plus la sécurité
+  const besoin = rdv ? Math.max(joursEntre(t, rdv) + 1, 0) + securite : null;
   const lignes = GRAMMAGES_LIST.map(g => {
     let info = '';
     if (besoin !== null) {
@@ -411,7 +468,14 @@ function rendreReserve() {
     </section>
     <section class="section">
       <h2 class="titre-section">Dans la boîte</h2>
-      <div class="liste">${lignes}</div>
+      <div class="liste">
+        ${lignes}
+        <div class="ligne">
+          <span class="libelle"><span>Jours de sécurité</span>
+            <span class="discret" style="display:block">${securite} jour${securite > 1 ? 's' : ''} de marge si la reprise est retardée</span></span>
+          <button class="bouton bouton-secondaire" data-action="ajout-securite" style="min-height:40px;padding:0 14px">Modifier</button>
+        </div>
+      </div>
     </section>
     <section class="section">
       <button class="bouton bouton-principal" style="width:100%" data-action="ajout-stock">Ajouter des gélules</button>
@@ -462,7 +526,7 @@ function rendreSuivi() {
 
   if (p) {
     const fin = ajouterJours(p.date_debut, p.duree - 1);
-    const jr = joursRestants();
+    const jr = joursAffiches();
     const finStock = jr !== null && jr > 0 ? ajouterJours(t, jr - 1) : t;
     const limite = finStock < fin ? finStock : fin;
     const restant = joursEntre(t, limite);
@@ -580,6 +644,19 @@ function ouvrirFormulaire(titre, champs, valider) {
     dlg.close();
   };
   dlg.showModal();
+}
+
+function ouvrirSecurite() {
+  ouvrirFormulaire('Jours de sécurité', [
+    { nom: 'jours', label: 'Nombre de jours de marge (0 à 14)', inputmode: 'numeric', valeur: joursSecurite() }
+  ], v => {
+    const n = parseInt(v.jours, 10);
+    if (isNaN(n) || n < 0 || n > 14) return 'Indiquez un nombre entre 0 et 14.';
+    enregistrer('definirSecurite', { jours: n }, () => {
+      donnees.Reglages = (donnees.Reglages || []).filter(x => x.cle !== 'jours_securite');
+      donnees.Reglages.push({ id: 'jours_securite', cle: 'jours_securite', valeur: n });
+    });
+  });
 }
 
 function ouvrirRdv() {
@@ -776,6 +853,7 @@ function supprimerElement(table, id) {
 }
 
 const ACTIONS_UI = {
+  'ajout-securite': ouvrirSecurite,
   'ajout-rdv': ouvrirRdv,
   'suppr-doc': b => supprimerElement('Documents', b.dataset.id),
   'statut': changerStatut,
