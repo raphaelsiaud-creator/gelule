@@ -256,6 +256,7 @@ async function envoyer(action, args = {}, code = lire(CLE_CODE)) {
   if (!json.ok) {
     if (json.erreur === 'CODE_INVALIDE') throw erreur('Code refusé.', true);
     if (json.erreur === 'STOCK_INSUFFISANT') throw erreur('Pas assez de gélules dans la réserve pour cette prise.');
+    if (json.erreur === 'ACTION_INCONNUE') throw erreur('Le serveur ne reconnaît pas cette action : redéployez Code.gs (Nouvelle version).');
     if (json.erreur === 'TYPE_NON_ACCEPTE') throw erreur('Format non accepté : choisissez une photo ou un PDF.');
     if (json.erreur === 'FICHIER_TROP_GROS') throw erreur('Fichier trop volumineux (10 Mo maximum).');
     throw erreur('Le serveur n’a pas pu enregistrer. Vos données ont été rechargées.');
