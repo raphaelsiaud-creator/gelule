@@ -14,6 +14,9 @@
 <link rel="stylesheet" href="gelule-style.css">
 <style>
 [hidden]{display:none!important}
+/* Deux touches rapides : Safari ne doit pas les prendre pour un double-tap (zoom) */
+button, select, input, textarea, a, label { touch-action: manipulation; }
+
 /* Allègement visuel */
 :root {
   --ombre: 0 4px 16px rgba(52, 78, 68, .05), inset 0 1px 0 rgba(255, 255, 255, .8);
