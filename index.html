@@ -14,6 +14,10 @@
 <link rel="stylesheet" href="gelule-style.css">
 <style>
 [hidden]{display:none!important}
+/* Bulle du jour : hauteur réduite de 25 % */
+.bulle-bouton { min-height: 112px; padding: 14px 16px; }
+.bulle-centree { min-height: 83px; }
+
 /* Deux touches rapides : Safari ne doit pas les prendre pour un double-tap (zoom) */
 button, select, input, textarea, a, label { touch-action: manipulation; }
 
@@ -441,14 +445,14 @@ function rendreReserve() {
   if (rdv === null) {
     lignesBulle.push('Indiquez la date de votre prochain rendez-vous dans Suivi médical.');
   } else if (jr !== null && rdv > fin) {
-    const sans = Math.max(joursEntre(fin, rdv) - 1, 0);
+    const sans = Math.max(joursEntre(fin, rdv), 0);
     lignesBulle.push(`Sans traitement pendant ${sans} jour${sans > 1 ? 's' : ''}, avant le rendez-vous du ${joliDate(rdv)}.`);
   } else {
     lignesBulle.push(`Prochain rendez-vous : ${joliDate(rdv)}.`);
   }
 
   // Jours à couvrir jusqu'au rendez-vous (jour compris), plus la sécurité
-  const besoin = rdv ? Math.max(joursEntre(t, rdv) + 1, 0) + securite : null;
+  const besoin = rdv ? Math.max(joursEntre(t, rdv), 0) + securite : null;
   const lignes = GRAMMAGES_LIST.map(g => {
     let info = '';
     if (besoin !== null) {
