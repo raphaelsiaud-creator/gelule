@@ -1,1329 +1,965 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Budget Maison</title>
-<meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Budget">
+<meta name="apple-mobile-web-app-title" content="Gélule">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#f4f6f5">
+<meta name="theme-color" content="#f2f5f3">
+<meta name="robots" content="noindex">
+<title>Gélule</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icone-180.png">
-<link rel="icon" type="image/png" href="icone-192.png">
+<link rel="stylesheet" href="gelule-style.css">
 <style>
-  :root {
-    --fond: #f4f6f5;
-    --surface: rgba(255,255,255,.78);
-    --verre: rgba(255,255,255,.62);
-    --flou: blur(20px) saturate(160%);
-    --lisere: rgba(39,50,46,.055);
-    --texte: #2a3431;
-    --discret: #929b97;
-    --fait: #bcc4c0;
-    --trait: rgba(39,50,46,.06);
-    --bord: rgba(39,50,46,.08);
-    --accent: #43907a;
-    --accent-pastel: #b5ddcf;
-    --accent-doux: rgba(181,221,207,.35);
-    --rentree: #44946d;
-    --alerte: #d0665d;
-    --ombre: 0 1px 2px rgba(39,50,46,.03), 0 4px 16px rgba(39,50,46,.035);
-    --rayon: 20px;
-    color-scheme: light;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; }
-  html { overscroll-behavior-y: none; background: var(--fond); }
-  body {
-    background: transparent; color: var(--texte);
-    font: 15px/1.45 -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
-    -webkit-text-size-adjust: 100%; -webkit-font-smoothing: antialiased;
-    padding-bottom: calc(100px + env(safe-area-inset-bottom));
-  }
-  /* Fond pastel très diffus */
-  body::before {
-    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background:
-      radial-gradient(60% 45% at 8% 0%, rgba(190,230,214,.42), transparent 70%),
-      radial-gradient(55% 40% at 100% 15%, rgba(212,226,246,.40), transparent 70%),
-      radial-gradient(60% 45% at 90% 100%, rgba(244,228,214,.32), transparent 70%),
-      var(--fond);
-  }
-  button, input, select, textarea { font: inherit; color: inherit; }
-  button { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
-  button:disabled { cursor: default; }
-  .corps:not(:disabled):active, .ajouter:active, .rond:active, .lien:active, .puce:active, .bouton:active,
-  .virement:not(:disabled):active, nav.onglets button:active { opacity: .5; }
-  .page {
-    max-width: 620px; margin: 0 auto;
-    padding: 0 max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left));
-  }
-  svg { stroke-width: 1.6; }
+[hidden]{display:none!important}
+/* Bulle du jour : hauteur réduite de 25 % */
+.bulle-bouton { min-height: 112px; padding: 14px 16px; }
+.bulle-centree { min-height: 83px; }
 
-  /* Surfaces : blanc léger, liseré fin, ombre à peine visible (le flou est réservé aux barres et aux fenêtres) */
-  .tuile, .liste, .carte, .rond, .puce {
-    background: var(--surface); border: 1px solid var(--lisere); box-shadow: var(--ombre);
-  }
+/* Barre d'onglets : l'onglet actif s'élargit et son icône grossit (même effet que Budget Maison) */
+.barre-onglets .onglet {
+  flex: 1 1 0;
+  min-width: 0;
+  transition: flex-grow .35s cubic-bezier(.3,.7,.2,1), background .25s, color .25s, font-size .3s;
+}
+.barre-onglets .onglet svg {
+  transition: transform .35s cubic-bezier(.3,.7,.2,1);
+}
+.barre-onglets .onglet[aria-current="page"] {
+  flex-grow: 1.8;
+}
+.barre-onglets .onglet[aria-current="page"] svg {
+  transform: scale(1.15);
+}
+@media (prefers-reduced-motion: reduce) {
+  .barre-onglets .onglet, .barre-onglets .onglet svg { transition: none; }
+}
 
-  /* En-tête en verre */
-  header.haut {
-    position: sticky; top: 0; z-index: 5; margin: 0 -18px; text-align: center;
-    padding: calc(12px + env(safe-area-inset-top)) 18px 10px;
-    background: rgba(244,246,245,.7);
-    -webkit-backdrop-filter: var(--flou); backdrop-filter: var(--flou);
-  }
-  header.haut h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
-  #etat {
-    position: absolute; right: 18px; bottom: 12px; font-size: 11.5px; color: var(--discret);
-    border: 0; background: none; padding: 0;
-  }
-  #etat.reessayer { color: var(--accent); font-weight: 600; }
+/* Deux touches rapides : Safari ne doit pas les prendre pour un double-tap (zoom) */
+button, select, input, textarea, a, label { touch-action: manipulation; }
 
-  /* Barre d'onglets flottante, fine */
-  nav.onglets {
-    position: fixed; z-index: 10;
-    left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right));
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    max-width: 520px; margin: 0 auto; padding: 4px; border-radius: 28px;
-    display: flex; justify-content: center; gap: 2px;
-    background: var(--verre);
-    -webkit-backdrop-filter: var(--flou); backdrop-filter: var(--flou);
-    border: 1px solid rgba(255,255,255,.7);
-    box-shadow: 0 8px 28px rgba(39,50,46,.09), inset 0 1px 0 rgba(255,255,255,.8);
-  }
-  nav.onglets:empty { display: none; }
-  /* L'onglet actif s'élargit, les autres se resserrent */
-  nav.onglets button {
-    flex: 1 1 0; min-width: 0; border: 0; background: none; padding: 6px 2px 5px; border-radius: 24px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-    font-size: 9.5px; line-height: 1.15; text-align: center; color: var(--discret); min-height: 48px;
-    transition: flex-grow .35s cubic-bezier(.3,.7,.2,1), background .25s, color .25s, font-size .3s;
-  }
-  nav.onglets button span { max-width: 100%; padding-top: 1px; }
-  nav.onglets button svg { width: 20px; height: 20px; stroke-width: 1.5; transition: transform .35s cubic-bezier(.3,.7,.2,1); }
-  nav.onglets button.actif {
-    flex-grow: 1.8; color: var(--accent); font-weight: 600; font-size: 10.5px; background: var(--accent-doux);
-  }
-  nav.onglets button.actif svg { transform: scale(1.15); }
+/* Allègement visuel */
+:root {
+  --ombre: 0 4px 16px rgba(52, 78, 68, .05), inset 0 1px 0 rgba(255, 255, 255, .8);
+  --verre: rgba(255, 255, 255, .68);
+  --verre-bord: rgba(255, 255, 255, .6);
+}
+body { font-size: 15px; }
+.titre-section { font-size: 11px; margin-bottom: 6px; }
+.titre-ecran { font-size: 22px; }
+.carte, .carte-principale { padding: 16px; border-radius: 20px; }
+.carte-principale {
+  background: linear-gradient(155deg, rgba(214, 240, 228, .9), rgba(196, 230, 214, .75));
+  box-shadow: 0 6px 18px rgba(63, 140, 117, .10);
+}
+.liste { border-radius: 20px; }
+.ligne { min-height: 48px; padding: 12px 16px; }
+.ligne-prise { padding: 12px 16px; }
+.ligne .libelle, .nom-gelule { font-size: 15px; }
+.grand-chiffre { font-size: 18px; }
+.bulle-centree .chiffre { font-size: clamp(20px, 6.5vw, 26px); font-weight: 600; }
+.bulle-centree .jour { font-size: 15px; font-weight: 500; }
+.segment { min-height: 36px; font-size: 13px; font-weight: 500; border-width: 1px; }
+.segment[data-statut="pris"][aria-pressed="true"] { background: #4f9c84; border-color: #4f9c84; }
+.bouton { min-height: 46px; font-size: 15px; font-weight: 500; box-shadow: none; }
+.bouton-principal { box-shadow: 0 4px 12px rgba(63, 140, 117, .18); }
+.onglet { font-size: 10px; }
+.barre-onglets { box-shadow: 0 6px 18px rgba(52, 78, 68, .06); }
+.croix-supprimer { width: 30px; height: 30px; font-size: 18px; }
 
-  .barre-mois { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 20px; }
-  .barre-mois h2 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -.02em; text-transform: capitalize; }
-  .rond { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); }
-  .rond svg { width: 18px; height: 18px; stroke-width: 2; }
-  .rond:disabled { opacity: .3; box-shadow: none; }
-
-  /* Mois clôturé */
-  .cloture {
-    display: flex; align-items: center; gap: 8px; margin: -6px 0 16px; padding: 9px 14px;
-    border-radius: 14px; background: var(--accent-doux); color: #557568; font-size: 13px;
-  }
-  .cloture svg { width: 16px; height: 16px; flex: none; }
-  .cloture span { flex: 1; }
-  .cloture .lien { min-height: 0; padding: 4px 0; font-size: 13px; }
-
-  /* Carte des virements à faire : menthe très clair */
-  .hero {
-    background: linear-gradient(160deg, rgba(220,240,232,.95), rgba(204,232,221,.85));
-    border: 1px solid rgba(255,255,255,.8);
-    color: var(--texte);
-    border-radius: 24px; padding: 16px 20px 6px; margin-bottom: 14px;
-    box-shadow: 0 6px 22px rgba(67,144,122,.08);
-  }
-  .hero h3 { margin: 0 0 2px; font-size: 12px; font-weight: 500; color: #5e7c71; letter-spacing: .01em; }
-  .virement {
-    display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: none; color: inherit;
-    padding: 12px 0; min-height: 54px; text-align: left; border-top: 1px solid rgba(255,255,255,.7);
-  }
-  .hero h3 + .virement { border-top: 0; }
-  .virement .qui { flex: 1; font-size: 16px; font-weight: 400; }
-  .virement b { font-size: 20px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-  .virement .coche { border-color: rgba(67,144,122,.35); background: rgba(255,255,255,.5); }
-  .virement.fait .coche { background: rgba(255,255,255,.8); border-color: rgba(255,255,255,.9); }
-  .virement .coche svg { stroke: #9dbbb0; }
-  .virement.fait .qui, .virement.fait b { opacity: .38; }
-
-  .tuiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 28px; }
-  .tuile { border-radius: var(--rayon); padding: 14px 16px; }
-  .tuile span { display: block; font-size: 11.5px; font-weight: 500; color: var(--discret); }
-  .tuile b { display: block; margin-top: 4px; font-size: 18px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-  .negatif { color: var(--alerte); }
-  button.tuile { text-align: left; width: 100%; }
-
-  /* Mois de prélèvement (fiche d'une charge) */
-  .mois12 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-  .mois12 label { position: relative; }
-  .mois12 input { position: absolute; inset: 0; opacity: 0; margin: 0; }
-  .mois12 span {
-    display: grid; place-items: center; min-height: 38px; border-radius: 11px; border: 1px solid var(--bord);
-    font-size: 12.5px; font-weight: 500; color: var(--discret); background: rgba(255,255,255,.6);
-  }
-  .mois12 input:checked + span { background: var(--accent-pastel); border-color: var(--accent-pastel); color: #2b5e50; }
-
-  /* Impôts : rubriques d'un enfant et leurs dépenses */
-  .rubrique + .rubrique { border-top: 1px solid var(--trait); }
-  .rubrique .nom b { font-weight: 500; }
-  .plus-rond {
-    flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-doux); color: var(--accent);
-    display: grid; place-items: center; font-weight: 500; font-size: 16px; line-height: 1;
-  }
-  .ligne.sous .corps { padding: 6px 16px 6px 30px; min-height: 40px; font-size: 13.5px; }
-  .ligne.sous .nom, .ligne.sous .montant { color: var(--discret); font-weight: 400; }
-  .ligne.sous::before { display: none; }
-
-  /* Épargne : versements spontanés */
-  .historique { margin-top: 10px; border-top: 1px solid var(--trait); }
-  .hist {
-    display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;
-    border: 0; border-bottom: 1px solid var(--trait); background: none; padding: 10px 0; min-height: 44px; text-align: left;
-  }
-  .hist small { color: var(--discret); font-size: 12px; margin-left: 6px; }
-  .hist b { color: var(--rentree); font-weight: 500; font-variant-numeric: tabular-nums; }
-  .hist:active { opacity: .5; }
-
-  /* Listes groupées façon iOS */
-  section.bloc { margin-bottom: 28px; }
-  section.bloc > h3 {
-    font-size: 11px; margin: 0 0 8px 16px; color: var(--discret); font-weight: 500;
-    text-transform: uppercase; letter-spacing: .07em;
-    display: flex; justify-content: space-between; align-items: baseline; padding-right: 16px;
-  }
-  .liste { border-radius: var(--rayon); overflow: hidden; }
-  .ligne { display: flex; align-items: center; position: relative; }
-  .ligne + .ligne::before {
-    content: ""; position: absolute; top: 0; right: 0; left: 16px; border-top: 1px solid var(--trait);
-  }
-  .liste.pointage .ligne + .ligne::before { left: 50px; }
-  .corps {
-    flex: 1; display: flex; align-items: center; gap: 12px; border: 0; background: none;
-    padding: 13px 16px; min-height: 50px; text-align: left; min-width: 0;
-  }
-  .jour { width: 38px; flex: none; font-size: 12.5px; color: var(--discret); font-variant-numeric: tabular-nums; }
-  .nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
-  .nom small { color: var(--discret); font-size: 11.5px; margin-left: 6px; }
-  .montant { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 500; }
-  .montant.plus { color: var(--rentree); }
-  /* Ligne cochée : nettement grisée */
-  .ligne.passee .nom, .ligne.passee .montant, .ligne.passee .jour { color: var(--fait); }
-  .ligne.passee .nom small { color: var(--fait); }
-  .ligne.inactive .corps { opacity: .45; }
-  .coche {
-    flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(39,50,46,.16);
-    background: rgba(255,255,255,.6);
-    display: grid; place-items: center; transition: background .15s, border-color .15s;
-  }
-  .coche svg { width: 13px; height: 13px; stroke: #fff; opacity: 0; transition: opacity .15s; }
-  .passee .coche { background: #d0d8d4; border-color: #d0d8d4; }
-  .passee .coche svg, .fait .coche svg { opacity: 1; }
-  .ajouter {
-    width: 100%; border: 0; border-top: 1px solid var(--trait); background: none; color: var(--accent);
-    padding: 13px 16px; text-align: left; font-weight: 500; min-height: 48px;
-  }
-  .liste .ajouter:first-child { border-top: 0; }
-  .vide { color: var(--discret); text-align: center; padding: 30px 10px; }
-  .aide { font-size: 12.5px; color: var(--discret); margin: -4px 0 12px; }
-  .intro { margin: 4px 16px 18px; }
-
-  .carte { border-radius: var(--rayon); padding: 18px; }
-  .credit .entete { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-  .credit .entete h4 { margin: 0; font-size: 16px; font-weight: 500; }
-  .credit .entete b { font-size: 18px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-  /* Compte joint : séparation entre les entrées et les sorties */
-  .separateur { height: 7px; background: rgba(39,50,46,.035); border-top: 1px solid var(--trait); border-bottom: 1px solid var(--trait); }
-
-  /* Titre du mois : 3 touchers rapides ouvrent le graphique */
-  .titre-mois {
-    border: 0; background: none; padding: 0; font: inherit; color: inherit; letter-spacing: inherit;
-    text-transform: inherit; touch-action: manipulation; -webkit-user-select: none; user-select: none;
-  }
-  .titre-mois:active { opacity: .6; }
-
-  /* Impôts : bouton du récapitulatif, tout à droite */
-  .puce.recap { margin-left: auto; display: grid; place-items: center; width: 40px; padding: 0; color: var(--accent); }
-  .puce.recap svg { width: 18px; height: 18px; }
-
-  /* Petites fenêtres de récapitulatif */
-  .recap { display: grid; }
-  .recap-ligne {
-    display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 11px 0;
-    border: 0; border-top: 1px solid var(--trait); background: none; text-align: left; width: 100%;
-  }
-  .recap-ligne:first-child { border-top: 0; }
-  .recap-ligne span { flex: 1; }
-  .recap-ligne small { display: block; color: var(--discret); font-size: 11.5px; margin-top: 1px; }
-  .recap-ligne b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .recap-ligne.sous { padding-left: 12px; font-size: 14px; }
-  .recap-ligne.sous b { font-weight: 500; }
-  .recap-titre { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--discret); font-weight: 500; padding: 12px 0 2px; border-top: 1px solid var(--trait); }
-  .recap .lien { justify-self: start; padding-left: 12px; font-size: 14px; }
-  .recap-ligne.total { border-top: 1px solid var(--bord); margin-top: 4px; }
-  .recap-ligne.total b { font-size: 17px; }
-
-  /* Graphique des dépenses */
-  .tuile.ouvre span::after { content: " ›"; color: var(--accent); }
-  .graph-tete { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-  .graph-tete h3 { margin: 0; }
-  .graph-tete select {
-    border: 1px solid var(--bord); border-radius: 12px; padding: 7px 30px 7px 12px; font-size: 15px;
-    background: rgba(255,255,255,.75) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2343907a' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center / 14px;
-    -webkit-appearance: none; appearance: none;
-  }
-  .graph-tete select:focus { outline: 2px solid var(--accent-pastel); outline-offset: -1px; }
-  .graph-tete select:focus:not(:focus-visible) { outline: none; }
-  svg.graphique { width: 100%; height: auto; display: block; stroke-width: 1; }
-  .g-grille { stroke: var(--trait); }
-  .g-axe { fill: var(--discret); font-size: 9px; }
-  .g-valeur { fill: var(--texte); font-size: 8.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
-  .g-barre { fill: var(--accent-pastel); }
-  .g-barre.actuelle { fill: var(--accent); }
-  .g-resume { display: flex; gap: 12px; margin-top: 12px; }
-  .g-resume span {
-    flex: 1; background: var(--accent-doux); border-radius: 14px; padding: 10px 12px;
-    font-size: 11.5px; color: var(--discret);
-  }
-  .g-resume b { display: block; font-size: 16px; font-weight: 600; color: var(--texte); margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .total-restant { color: var(--discret); font-size: 11.5px; font-style: italic; text-align: right; margin-top: 1px; }
-  .credit .details { color: var(--discret); font-size: 12.5px; margin-top: 4px; }
-  .credit .actions { display: flex; gap: 18px; margin-top: 6px; align-items: center; justify-content: space-between; }
-  .modifier {
-    width: 44px; height: 44px; margin-right: -12px; border: 0; background: none; color: var(--discret);
-    display: grid; place-items: center;
-  }
-  .modifier svg { width: 18px; height: 18px; }
-  .modifier:active { opacity: .5; }
-  .lien { border: 0; background: none; color: var(--accent); padding: 8px 0; font-weight: 500; min-height: 44px; }
-  table.echeancier { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-  table.echeancier th, table.echeancier td { text-align: right; padding: 6px 4px; border-top: 1px solid var(--trait); }
-  table.echeancier th:first-child, table.echeancier td:first-child { text-align: left; text-transform: capitalize; white-space: nowrap; }
-  table.echeancier th { color: var(--discret); font-weight: 500; font-size: 11.5px; border-top: 0; }
-  table.echeancier tr.resume td { background: var(--accent-doux); font-weight: 600; padding: 8px 6px; border-top: 0; }
-  table.echeancier tr.resume td:first-child { border-radius: 10px 0 0 10px; }
-  table.echeancier tr.resume td:last-child { border-radius: 0 10px 10px 0; }
-  table.echeancier tr.resume small { display: block; font-size: 10.5px; font-weight: 400; color: var(--discret); }
-  .pile { display: grid; gap: 12px; }
-
-  .annees { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 20px; }
-  .puce { border-radius: 999px; padding: 7px 16px; min-height: 40px; font-weight: 500; }
-  .puce.actif { background: var(--accent-pastel); border-color: var(--accent-pastel); color: #2b5e50; }
-
-  /* Écran d'accueil : code familial, messages d'erreur */
-  .accueil { max-width: 360px; margin: 11vh auto 0; text-align: center; }
-  .accueil img { width: 76px; height: 76px; border-radius: 19px; box-shadow: 0 8px 24px rgba(67,144,122,.16); }
-  .accueil h2 { font-size: 22px; font-weight: 600; letter-spacing: -.02em; margin: 18px 0 6px; }
-  .accueil .aide { margin: 0 0 24px; font-size: 14px; }
-  .accueil .champ { text-align: left; }
-  .accueil .champ input { letter-spacing: .04em; }
-  .accueil .bouton { width: 100%; margin-top: 6px; }
-  .accueil .erreur { margin: -4px 0 12px; text-align: left; }
-
-  dialog {
-    border: 1px solid rgba(255,255,255,.7); border-radius: 26px; padding: 0; width: min(420px, calc(100vw - 32px));
-    max-height: 90vh; max-height: 90dvh; overflow: auto; overscroll-behavior: contain;
-    background: rgba(250,252,251,.86); color: var(--texte);
-    -webkit-backdrop-filter: var(--flou); backdrop-filter: var(--flou);
-    box-shadow: 0 16px 50px rgba(39,50,46,.14);
-  }
-  dialog::backdrop { background: rgba(39,50,46,.12); }
-  dialog form { padding: 22px; }
-  dialog h3 { margin: 0 0 14px; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
-  .champ { display: block; margin-bottom: 14px; }
-  .champ > span { display: block; font-size: 12.5px; color: var(--discret); margin-bottom: 5px; font-weight: 400; }
-  .champ input:not([type="checkbox"]), .champ select, .champ textarea {
-    width: 100%; padding: 12px 14px; border: 1px solid var(--bord); border-radius: 13px;
-    background: rgba(255,255,255,.75); font-size: 16px; -webkit-appearance: none; appearance: none;
-  }
-  .champ input:focus, .champ select:focus { outline: 2px solid var(--accent-pastel); outline-offset: -1px; }
-  .champ.case { display: flex; align-items: center; gap: 12px; }
-  .champ.case input { width: 20px; height: 20px; accent-color: var(--accent); }
-  .champ.case > span { margin: 0; font-size: 14.5px; color: var(--texte); }
-  .boutons { display: flex; gap: 10px; margin-top: 18px; align-items: center; }
-  .boutons .espace { flex: 1; }
-  .bouton {
-    border: 1px solid var(--bord); background: rgba(255,255,255,.7); border-radius: 14px;
-    padding: 11px 18px; min-height: 46px; font-weight: 500;
-  }
-  .bouton.principal { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .bouton.danger { color: var(--alerte); border-color: transparent; background: none; padding-left: 0; }
-  .erreur { color: var(--alerte); font-size: 13px; margin: 8px 0 0; }
-  @media (max-width: 600px) {
-    dialog[open] {
-      width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 26px 26px 0 0; border-bottom: 0;
-      animation: monte .24s ease-out;
-    }
-    dialog form { padding: 8px 18px calc(16px + env(safe-area-inset-bottom)); }
-    dialog form::before {
-      content: ""; display: block; width: 34px; height: 4px; border-radius: 2px;
-      background: rgba(39,50,46,.14); margin: 0 auto 14px;
-    }
-    .boutons { flex-wrap: wrap; }
-    .boutons .bouton:not(.danger) { flex: 1; }
-    .boutons .espace { display: none; }
-    .boutons .danger { width: 100%; order: 3; text-align: center; padding-left: 16px; }
-  }
-  @keyframes monte { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { dialog[open] { animation: none; } nav.onglets button, nav.onglets button svg { transition: none; } }
+/* Bulle du jour et calendrier : rappelés ici pour ne pas dépendre du cache du CSS */
+.bulle-wrap{position:relative;width:100%}
+.bulle-wrap .bulle-centree{box-sizing:border-box;width:100%}
+.choix-date{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;border:0;margin:0;padding:0;font-size:16px;cursor:pointer;-webkit-appearance:none;appearance:none}
 </style>
 </head>
 <body>
-<div class="page">
-  <header class="haut"><h1>Budget Maison</h1><button id="etat" data-action="rafraichir" disabled></button></header>
-  <main id="vue"></main>
+
+<section id="accueil" class="accueil" hidden>
+  <img class="icone-appli" src="icone-180.png" alt="">
+  <h1>Gélule</h1>
+  <p>Entrez le code familial pour accéder à l'appli.</p>
+  <form id="formCode" style="width:100%;max-width:420px">
+    <label class="champ-etiquette" for="champCode">Code familial</label>
+    <input id="champCode" class="champ" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <p id="erreurCode" class="discret" style="color:var(--alerte);min-height:20px"></p>
+    <button class="bouton bouton-principal" style="width:100%" type="submit">Entrer</button>
+  </form>
+</section>
+
+<div id="appli" hidden>
+  <header class="entete">
+    <h1 id="titreEcran">Mes prises</h1>
+    <button id="reessayer" class="bouton-rond" hidden aria-label="Réessayer">
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>
+    </button>
+  </header>
+  <p id="message" class="discret" role="alert" hidden style="padding:8px 18px 0;color:var(--alerte)"></p>
+  <main id="contenu" class="page" style="padding-top:12px"></main>
+
+  <nav class="barre-onglets" aria-label="Navigation">
+    <a class="onglet" href="#prises" data-onglet="prises">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
+      <span>Mes prises</span>
+    </a>
+    <a class="onglet" href="#reserve" data-onglet="reserve">
+      <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 10h16"/></svg>
+      <span>Ma réserve</span>
+    </a>
+    <a class="onglet" href="#plan" data-onglet="plan">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
+      <span>Mon plan</span>
+    </a>
+    <a class="onglet" href="#suivi" data-onglet="suivi">
+      <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>
+      <span>Suivi médical</span>
+    </a>
+  </nav>
 </div>
 
-<nav class="onglets" id="onglets"></nav>
-
-<dialog id="fenetre"><form method="dialog" id="formulaire" novalidate></form></dialog>
+<dialog id="dlg"><div id="dlgContenu"></div></dialog>
 
 <script>
-// ====== Réglage : adresse du déploiement Apps Script (se termine par /exec) ======
-const API = 'https://script.google.com/macros/s/AKfycbwHX3OS7wLunt-mJYUS-2ADsCMm-HsP71jp-OwBt2jWQfjoAIDtmPFlZQhhppqy0e9y/exec';
+/* ==========================================================================
+   Gélule : page (JavaScript sans bibliothèque)
+   ========================================================================== */
 
-// ====== Mémoire de l'iPhone (code familial et dernières données affichées) ======
+const API = 'https://script.google.com/macros/s/AKfycbwR5xArJMSMdT_j3YHImacqCsWdNAsSMOfuatGHyDUQAIhWSNXTP6pUntLJJDYsFq8/exec';
 
-const CLE_CODE = 'budget-maison:code', CLE_CACHE = 'budget-maison:donnees';
-const secours = {};
-const stock = {
-  lire(k) { try { return localStorage.getItem(k); } catch (e) { return secours[k] || null; } },
-  ecrire(k, v) {
-    try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); }
-    catch (e) { if (v == null) delete secours[k]; else secours[k] = v; }
-  }
-};
+const CLE_CACHE = 'gelule-cache';
+const CLE_CODE = 'gelule-code';
+const TAILLE_MAX_DOC = 10 * 1024 * 1024;
+const MOMENTS = { matin: 'Matin', soir: 'Après-midi' };
+const MOMENTS_LIST = ['matin', 'soir'];
+const GRAMMAGES_LIST = [20, 10];
+const TITRES = { prises: 'Mes prises', reserve: 'Ma réserve', plan: 'Mon plan', suivi: 'Mon suivi médical' };
 
-// ====== Données et appels au serveur ======
+const memoire = {};
+let donnees = null;
+let derniereMaj = 0;
+let dernierChargement = 0;
+let file = Promise.resolve();
+let dateVue = null; // null = aujourd'hui
 
-let d = null;                 // dernières données reçues (voir donnees_ dans Code.gs)
-let onglet = 'mois';
-let anneeImpots = null;
-const ouverts = new Set();    // échéanciers dépliés
+const $ = s => document.querySelector(s);
 
-class CodeRefuse extends Error {}
+// ---------- Stockage local (repli en mémoire) ----------
 
-async function appel(action, args) {
-  const code = stock.lire(CLE_CODE);
-  if (!code) throw new CodeRefuse();
+function lire(k) {
+  try { return localStorage.getItem(k); } catch (e) { return memoire[k] ?? null; }
+}
+function ecrire(k, v) {
+  try { localStorage.setItem(k, v); } catch (e) { memoire[k] = v; }
+}
+
+// ---------- Texte et dates ----------
+
+function esc(t) {
+  return String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function parseDate(s) {
+  const [a, m, j] = s.split('-').map(Number);
+  return new Date(a, m - 1, j);
+}
+function iso(d) {
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+}
+function ajouterJours(s, n) {
+  const d = parseDate(s);
+  d.setDate(d.getDate() + n);
+  return iso(d);
+}
+function joursEntre(a, b) {
+  return Math.round((parseDate(b) - parseDate(a)) / 86400000);
+}
+function joliDate(s) {
+  return parseDate(s).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+function dateCourante() {
+  return dateVue || donnees.aujourdhui;
+}
+function estAujourdhui() {
+  return dateCourante() === donnees.aujourdhui;
+}
+// Prises modifiables : aujourd'hui et les 7 jours précédents (oubli)
+function modifiable() {
+  const t = dateCourante();
+  return t <= donnees.aujourdhui && t >= ajouterJours(donnees.aujourdhui, -7);
+}
+
+// ---------- Calculs (à partir des données du Sheet) ----------
+
+function planActuel(moment, date) {
+  let choisi = null;
+  donnees.Plans.forEach(p => {
+    if (p.moment === moment && p.date_debut <= date && (!choisi || p.date_debut >= choisi.date_debut)) choisi = p;
+  });
+  return choisi;
+}
+function prescriptionActuelle() {
+  let c = null;
+  donnees.Prescriptions.forEach(p => { if (!c || p.date_debut >= c.date_debut) c = p; });
+  return c;
+}
+// Seules les gélules marquées « Pris » sont retirées de la réserve
+function consomme(g) {
+  return donnees.Prises.filter(p => p.statut === 'pris' && p.grammage === g).reduce((s, p) => s + p.quantite, 0);
+}
+function entrees(g) {
+  return donnees.Stock.filter(s => s.grammage === g).reduce((s, x) => s + x.quantite, 0);
+}
+function reste(g) {
+  return Math.max(entrees(g) - consomme(g), 0);
+}
+function parJour(g) {
+  return MOMENTS_LIST.reduce((s, m) => {
+    const p = planActuel(m, donnees.aujourdhui);
+    return s + (p ? (g === 20 ? p.g20 : p.g10) : 0);
+  }, 0);
+}
+function joursRestants() {
+  let min = Infinity;
+  GRAMMAGES_LIST.forEach(g => {
+    const r = parJour(g);
+    if (r > 0) min = Math.min(min, Math.floor(reste(g) / r));
+  });
+  return min === Infinity ? null : min;
+}
+// Le jour de la consultation est compté : la médication est prise ce jour-là
+function joursAffiches() {
+  const jr = joursRestants();
+  return jr === null ? null : jr + 1;
+}
+// Jours de sécurité choisis par l'utilisateur (0 par défaut)
+function joursSecurite() {
+  const r = (donnees.Reglages || []).find(x => x.cle === 'jours_securite');
+  return r ? r.valeur : 0;
+}
+function premierJour() {
+  const dates = donnees.Prescriptions.map(p => p.date_debut).sort();
+  return dates.length ? dates[0] : donnees.aujourdhui;
+}
+// Dernier rendez-vous saisi, à partir d'aujourd'hui
+function prochainRdv() {
+  const t = donnees.aujourdhui;
+  const futurs = (donnees.RendezVous || []).filter(r => r.date >= t);
+  return futurs.length ? futurs[futurs.length - 1].date : null;
+}
+function libelleStatut(s) {
+  if (s === 'pris') return 'Pris';
+  if (s === 'saute') return 'Pas pris';
+  return 'À prendre';
+}
+function detail(g20, g10) {
+  const m = [];
+  if (g20) m.push(g20 + ' × 20 mg');
+  if (g10) m.push(g10 + ' × 10 mg');
+  return m.join(' + ') || 'Rien';
+}
+
+// ---------- Communication avec le serveur ----------
+
+function erreur(m, codeInvalide) {
+  const e = new Error(m);
+  if (codeInvalide) e.codeInvalide = true;
+  return e;
+}
+
+async function envoyer(action, args = {}, code = lire(CLE_CODE)) {
   let rep;
   try {
     rep = await fetch(API, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // évite la vérification préalable (CORS)
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ code, action, args })
     });
   } catch (e) {
-    throw new Error('Pas de connexion internet.');
+    throw erreur('Connexion impossible. Vérifiez votre réseau et réessayez.');
   }
-  if (!rep.ok) throw new Error('Le serveur ne répond pas (erreur ' + rep.status + ').');
-  let r;
-  try { r = await rep.json(); }
-  catch (e) { throw new Error('Réponse inattendue du serveur : vérifie que le déploiement est en accès « Tout le monde ».'); }
-  if (!r.ok && r.erreur === 'CODE_INVALIDE') throw new CodeRefuse();
-  if (!r.ok) throw new Error(r.erreur);
-  return r.data;
+  let json;
+  try {
+    json = await rep.json();
+  } catch (e) {
+    throw erreur('Réponse inattendue du serveur. Vérifiez que le déploiement est en accès « Tout le monde ».');
+  }
+  if (!json.ok) {
+    if (json.erreur === 'CODE_INVALIDE') throw erreur('Code refusé.', true);
+    if (json.erreur === 'STOCK_INSUFFISANT') throw erreur('Pas assez de gélules dans la réserve pour cette prise.');
+    if (json.erreur === 'ACTION_INCONNUE') throw erreur('Le serveur ne reconnaît pas cette action : redéployez Code.gs (Nouvelle version).');
+    if (json.erreur === 'DATE_NON_MODIFIABLE') throw erreur('Cette journée n’est plus modifiable (7 jours maximum).');
+    if (json.erreur === 'TYPE_NON_ACCEPTE') throw erreur('Format non accepté : choisissez une photo ou un PDF.');
+    if (json.erreur === 'FICHIER_TROP_GROS') throw erreur('Fichier trop volumineux (10 Mo maximum).');
+    throw erreur('Le serveur n’a pas pu enregistrer. Vos données ont été rechargées.');
+  }
+  return json.data;
 }
 
-// Les appels passent l'un après l'autre ; on n'affiche que la réponse du dernier.
-let file = Promise.resolve(), enCours = 0, avis = '', derniereMaj = 0;
-function serveur(action, args) {
-  const ecriture = action !== 'donnees';
-  enCours++; majEtat();
-  file = file.then(() => appel(action, args)).then(res => {
-    enCours--;
-    avis = ''; derniereMaj = Date.now();
-    if (!enCours && res) { d = res; memoriser(); rendre(); }
-    majEtat();
-  }).catch(err => {
-    enCours--;
-    if (err instanceof CodeRefuse) {
-      majEtat();
-      demanderCode(stock.lire(CLE_CODE) ? 'Code refusé. Saisis le code familial actuel.' : '');
+// File d'appels séquentielle : une requête à la fois
+function appeler(action, args) {
+  const r = file.then(() => envoyer(action, args));
+  file = r.catch(() => {});
+  return r;
+}
+
+// Compteur des modifications envoyées : une lecture commencée avant une modification
+// ne doit pas écraser l'affichage avec un état plus ancien
+let compteurEcritures = 0;
+let ecrituresEnCours = 0;
+
+async function charger() {
+  const id = ++dernierChargement;
+  const versionAvant = compteurEcritures;
+  try {
+    const d = await appeler('donnees');
+    if (id !== dernierChargement) return; // un chargement plus récent a été lancé
+    if (compteurEcritures !== versionAvant) return; // une modification a eu lieu entre-temps
+    donnees = d;
+    derniereMaj = Date.now();
+    ecrire(CLE_CACHE, JSON.stringify(d));
+    $('#message').hidden = true;
+    $('#reessayer').hidden = true;
+    rendre();
+  } catch (e) {
+    if (e.codeInvalide) {
+      ecrire(CLE_CODE, '');
+      montrerAccueil('Code refusé. Entrez-le à nouveau.');
       return;
     }
-    const msg = err && err.message ? err.message : String(err);
-    if (ecriture) {
-      majEtat();
-      alert('Pas enregistré : ' + msg);
-      if (!enCours) charger(d ? d.mois : '');   // remet l'écran d'accord avec le Sheet
-    } else if (d) {
-      avis = 'Réessayer'; majEtat();              // on garde l'affichage précédent
-    } else {
-      majEtat();
-      afficherMessage('Impossible de charger le budget', msg, true);
-    }
-  });
-}
-function majEtat() {
-  const e = document.getElementById('etat');
-  e.textContent = enCours ? 'Mise à jour…' : avis;
-  e.disabled = !!enCours || !avis;
-  e.classList.toggle('reessayer', !enCours && !!avis);
-}
-function memoriser() {
-  if (d && d.mois === (d.moisDefaut || d.moisCourant)) stock.ecrire(CLE_CACHE, JSON.stringify(d));
-}
-const charger = mois => serveur('donnees', { mois: mois || '' });
-const sauver = (table, objet) => serveur('enregistrer', { table, objet, mois: d.mois });
-const effacer = (table, id) => serveur('supprimer', { table, id, mois: d.mois });
-
-// ====== Accueil : code familial et messages ======
-
-function demanderCode(message) {
-  stock.ecrire(CLE_CODE, null);
-  stock.ecrire(CLE_CACHE, null);
-  d = null;
-  document.getElementById('onglets').innerHTML = '';
-  document.getElementById('vue').innerHTML = `<form class="accueil" id="form-code" novalidate>
-    <img src="icone-180.png" alt="">
-    <h2>Budget Maison</h2>
-    <p class="aide">Saisis le code familial pour accéder au budget. Il ne te sera demandé qu’une fois sur cet appareil.</p>
-    <label class="champ"><span>Code familial</span>
-      <input name="code" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"></label>
-    ${message ? `<p class="erreur">${esc(message)}</p>` : ''}
-    <button type="submit" class="bouton principal">Accéder au budget</button>
-  </form>`;
-}
-
-function afficherMessage(titre, texte, reessayer) {
-  document.getElementById('onglets').innerHTML = '';
-  document.getElementById('vue').innerHTML = `<div class="accueil">
-    <img src="icone-180.png" alt="">
-    <h2>${esc(titre)}</h2>
-    <p class="aide">${esc(texte)}</p>
-    ${reessayer ? '<button class="bouton principal" data-action="rafraichir">Réessayer</button>' : ''}
-  </div>`;
-}
-
-document.addEventListener('submit', e => {
-  if (e.target.id !== 'form-code') return;
-  e.preventDefault();
-  const code = e.target.elements.code.value.trim();
-  if (!code) return;
-  stock.ecrire(CLE_CODE, code);
-  document.getElementById('vue').innerHTML = '<p class="vide">Vérification du code…</p>';
-  charger();
-});
-
-// ====== Calculs ======
-
-const r2 = x => Math.round((x + Number.EPSILON) * 100) / 100;
-const somme = liste => r2(liste.reduce((s, l) => s + (Number(l.montant) || 0), 0));
-function arrondiSup(x, pas) {
-  x = r2(x);
-  return pas > 0 ? Math.ceil(x / pas - 1e-9) * pas : x;
-}
-
-/**
- * Part de chacun = (charges communes, crédit auto compris − rentrées communes comme la CAF)
- * ÷ nombre de personnes, arrondie à la centaine au-dessus (pour faire un peu d'épargne).
- * Virement de chacun = sa part − les charges communes qu'il paie déjà depuis son compte
- * (crédit auto pour Raph), arrondi aussi. Un montant saisi à la main dans le Sheet l'emporte.
- */
-function calculerMois(lignes, personnes, arrondi) {
-  const charges = lignes.filter(l => l.type === 'Charge');
-  const rentrees = lignes.filter(l => l.type === 'Rentrée');
-  const communes = somme(charges.filter(l => l.partagee));
-  const aides = somme(rentrees.filter(l => l.partagee));
-  const besoin = Math.max(0, r2(communes - aides));
-  const part = personnes.length ? arrondiSup(besoin / personnes.length, arrondi) : 0;
-  const pers = {};
-  personnes.forEach(p => {
-    const directes = somme(charges.filter(l => l.partagee && l.compte === p));
-    const auto = Math.max(0, arrondiSup(part - directes, arrondi));
-    const ligne = lignes.find(l => l.type === 'Virement' && l.compte === p);
-    const virement = ligne && ligne.montant != null ? Number(ligne.montant) : auto;
-    pers[p] = { directes, auto, virement, ligne };
-  });
-  const virements = r2(personnes.reduce((s, p) => s + pers[p].virement, 0));
-  const jointEntrees = r2(virements + somme(rentrees.filter(l => l.compte === 'Joint')));
-  const jointSorties = somme(charges.filter(l => l.compte === 'Joint'));
-  const resteAPrelever = r2(somme(charges.filter(l => l.compte === 'Joint' && !l.passee))
-    - somme(rentrees.filter(l => l.compte === 'Joint' && !l.passee)));
-  return { communes, aides, besoin, part, pers, joint: { fin: r2(jointEntrees - jointSorties), resteAPrelever } };
-}
-
-function moisEntre(a, b) {
-  const [ya, ma] = a.split('-').map(Number), [yb, mb] = b.split('-').map(Number);
-  return (yb - ya) * 12 + (mb - ma);
-}
-function ajouterMois(m, n) {
-  const [y, mo] = m.split('-').map(Number);
-  const t = y * 12 + (mo - 1) + n;
-  return Math.floor(t / 12) + '-' + String(t % 12 + 1).padStart(2, '0');
-}
-
-/** Paiements cochés (tous les mois) de la charge qui rembourse ce crédit, après son mois de référence. */
-function paiementsCoches(charge) {
-  const autres = (d.paiements || []).filter(p => p.mois !== d.mois);
-  return autres.concat(d.lignes.filter(l => l.passee)).filter(p => p.charge === charge)
-    .sort((a, b) => a.mois.localeCompare(b.mois));
-}
-
-const echeancesDe = c => (d.echeances || []).filter(e => e.credit === c.id).sort((a, b) => a.terme - b.terme);
-
-/**
- * Crédit avec tableau d'amortissement (prêt immobilier) : une échéance par mois à partir du mois de la
- * 1re échéance (c.debut). Payée si son mois est au plus tard c.au, ou si son paiement est coché.
- * Montants : intérêts + amortissement (sans l'assurance). Le restant affiché est le capital restant à amortir.
- */
-function projeterTableau(c, tableau) {
-  const initial = Number(c.initial) || r2(tableau.reduce((s, e) => s + (e.amortissement || 0), 0));
-  if (!c.debut) return { tableau: true, sansDate: true, aujourdhui: initial, totalRestant: null, echeances: [], fin: null };
-  const coches = new Set(c.charge ? paiementsCoches(c.charge).map(p => p.mois) : []);
-  let rembourse = 0, totalRestant = 0;
-  const echeances = [];
-  tableau.forEach(e => {
-    const mois = ajouterMois(c.debut, e.terme - 1);
-    const paye = r2((e.interets || 0) + (e.amortissement || 0));
-    if ((c.au && mois <= c.au) || coches.has(mois)) rembourse += e.amortissement || 0;
-    else { echeances.push({ mois, paye, reste: e.capital }); totalRestant += paye; }
-  });
-  return {
-    tableau: true, aujourdhui: Math.max(0, r2(initial - rembourse)), totalRestant: r2(totalRestant),
-    echeances, fin: echeances.length ? echeances[echeances.length - 1].mois : null
-  };
-}
-
-/**
- * Restant dû aujourd'hui et échéances à venir (une par mois, la dernière ajustée).
- * Crédit relié à une charge : il baisse quand on coche son paiement dans l'onglet Mois.
- * Crédit géré à la main : il baisse tout seul chaque mois.
- */
-function projeterCredit(c, courant) {
-  const m = Number(c.mensualite) || 0;
-  const tableau = echeancesDe(c);
-  if (tableau.length) return projeterTableau(c, tableau);
-  if (c.charge) {
-    const payes = paiementsCoches(c.charge).filter(p => !c.au || p.mois > c.au);
-    let reste = Math.max(0, r2((Number(c.restant) || 0) - somme(payes)));
-    const aujourdhui = reste;
-    let mois = payes.length ? payes[payes.length - 1].mois : (c.au || ajouterMois(courant, -1));
-    const echeances = [];
-    while (m > 0 && reste > 0 && echeances.length < 600) {
-      mois = ajouterMois(mois, 1);
-      const paye = Math.min(m, reste);
-      reste = r2(reste - paye);
-      echeances.push({ mois, paye, reste });
-    }
-    return { aujourdhui, echeances, fin: echeances.length ? echeances[echeances.length - 1].mois : null };
+    afficherErreur(e.message);
+    if (donnees) $('#reessayer').hidden = false;
   }
-  const depart = c.au || courant;
-  const ecoule = Math.max(0, moisEntre(depart, courant));
-  let reste = Math.max(0, r2((Number(c.restant) || 0) - m * ecoule));
-  const aujourdhui = reste;
-  let mois = ecoule > 0 ? courant : depart;
-  const echeances = [];
-  while (m > 0 && reste > 0 && echeances.length < 600) {
-    mois = ajouterMois(mois, 1);
-    const paye = Math.min(m, reste);
-    reste = r2(reste - paye);
-    echeances.push({ mois, paye, reste });
+}
+
+// Mise à jour optimiste, puis enregistrement. Une fois toutes les modifications
+// envoyées, l'état réel est relu depuis le serveur. En cas d'échec, rechargement.
+async function enregistrer(action, args, appliquer) {
+  compteurEcritures++;
+  ecrituresEnCours++;
+  if (appliquer) appliquer();
+  rendre();
+  let ok = true;
+  try {
+    await appeler(action, args);
+  } catch (e) {
+    ok = false;
+    afficherErreur(e.message);
+    if (e.codeInvalide) {
+      ecrituresEnCours--;
+      ecrire(CLE_CODE, '');
+      montrerAccueil('Code refusé. Entrez-le à nouveau.');
+      return;
+    }
   }
-  return { aujourdhui, echeances, fin: echeances.length ? echeances[echeances.length - 1].mois : null };
+  ecrituresEnCours--;
+  if (!ok || ecrituresEnCours === 0) await charger();
 }
 
-const versementsDe = e => (d.versements || []).filter(v => v.epargne === e.id)
-  .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-
-/** Livret : versement mensuel × nombre de mois depuis l'ouverture (mois d'ouverture et mois en cours compris)
- *  + versement initial éventuel + versements ajoutés. */
-function partsEpargne(e, courant) {
-  const mensuel = r2((Number(e.solde) || 0) + (Number(e.versement) || 0) * Math.max(0, moisEntre(e.au || courant, courant) + 1));
-  const ajoute = somme(versementsDe(e));
-  return { mensuel, ajoute, total: r2(mensuel + ajoute) };
+function afficherErreur(texte) {
+  const m = $('#message');
+  m.textContent = texte;
+  m.hidden = false;
 }
 
-// ====== Affichage ======
+// ---------- Affichage des écrans ----------
 
-const euros = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
-const eur = x => euros.format(x || 0);
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const nomMois = m => { const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); };
-const nomCompte = c => c === 'Joint' ? 'Compte joint' : c;
-const dateCourte = iso => new Date(iso + 'T12:00').toLocaleDateString('fr-FR');
-const aujourdhuiIso = () => { const t = new Date(); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); };
-const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-const moisListe = texte => String(texte || '').split(/[;, ]+/).map(Number).filter(n => n >= 1 && n <= 12);
-const RUBRIQUES_IMPOTS = ['Crèche', 'Périscolaire', 'Cantine'];
-const comptes = () => ['Joint'].concat(d.personnes);
-const cloture = m => (d.clotures || []).find(c => c.mois === m) || null;
-/** Lignes affichées (donc à cocher) dans l'onglet Mois : pas les salaires sur les comptes perso. */
-const aPointer = l => l.type === 'Virement' ? d.personnes.indexOf(l.compte) >= 0
-  : l.compte === 'Joint' || (d.personnes.indexOf(l.compte) >= 0 && l.type === 'Charge');
-const toutCoche = () => d.lignes.filter(aPointer).every(l => l.passee);
-const parJour = (a, b) => (a.jour == null ? 99 : a.jour) - (b.jour == null ? 99 : b.jour) || (a.ordre || 0) - (b.ordre || 0) || String(a.intitule).localeCompare(b.intitule);
+function montrerAppli() { $('#accueil').hidden = true; $('#appli').hidden = false; }
+function montrerAccueil(msg) {
+  $('#appli').hidden = true;
+  $('#accueil').hidden = false;
+  $('#erreurCode').textContent = msg || '';
+}
 
-const ICONES = {
-  mois: '<path d="M4 6h16v14H4zM4 10h16M9 3v4M15 3v4"/>',
-  charges: '<path d="M5 6h14M5 12h14M5 18h9"/>',
-  credits: '<path d="M3 7h18v10H3zM3 11h18M7 15h3"/>',
-  epargne: '<path d="M12 3v18M7 8c0-2 2-3 5-3s5 1 5 3-2 3-5 3.5S7 13 7 15s2 3 5 3 5-1 5-3"/>',
-  impots: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"/>',
-  gauche: '<path d="M15 6l-6 6 6 6"/>',
-  droite: '<path d="M9 6l6 6-6 6"/>',
-  coche: '<path d="M5 12l4 4 10-10"/>',
-  crayon: '<path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/>',
-  cadenas: '<path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 017 0v3"/>'
-};
-const icone = (n, style) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${style || 1.8}" stroke-linecap="round" stroke-linejoin="round">${ICONES[n]}</svg>`;
-
-const ONGLETS = [['mois', 'Mois'], ['charges', 'Charges'], ['credits', 'Crédits'], ['epargne', 'Épargne'], ['impots', 'Impôts']];
+function ecranCourant() {
+  const h = location.hash.replace('#', '');
+  return TITRES[h] ? h : 'prises';
+}
 
 function rendre() {
-  if (!d) return;
-  // La barre n'est construite qu'une fois : on change seulement l'onglet actif, pour que l'animation se voie.
-  const nav = document.getElementById('onglets');
-  if (nav.children.length !== ONGLETS.length) {
-    nav.innerHTML = ONGLETS.map(([k, t]) =>
-      `<button data-action="onglet" data-k="${k}" class="${k === onglet ? 'actif' : ''}">${icone(k)}<span>${t}</span></button>`).join('');
-  } else {
-    [...nav.children].forEach(b => b.classList.toggle('actif', b.dataset.k === onglet));
-  }
-  const vues = { mois: vueMois, charges: vueCharges, credits: vueCredits, epargne: vueEpargne, impots: vueImpots };
-  document.getElementById('vue').innerHTML = vues[onglet]();
-}
-
-/** Une ligne de liste. opts : pointer (toucher = cocher), jour (afficher le jour), action, nom, montant, inactive. */
-function ligneHtml(l, opts) {
-  opts = opts || {};
-  const plus = l.type === 'Rentrée';
-  const montant = opts.montant != null ? opts.montant : l.montant;
-  const etiquettes = [];
-  if (l.type === 'Charge' && l.partagee && l.compte !== 'Joint') etiquettes.push('commune');
-  if (opts.inactive) etiquettes.push('arrêtée');
-  const recurrence = opts.recurrence ? moisListe(l.recurrence) : [];
-  if (recurrence.length && recurrence.length < 12) etiquettes.push(recurrence.map(n => MOIS_COURTS[n - 1]).join(' '));
-  return `<div class="ligne ${opts.pointer && l.passee ? 'passee' : ''} ${opts.inactive ? 'inactive' : ''}">
-    <button class="corps" data-action="${opts.pointer ? 'pointer' : opts.action}" data-id="${l.id}"${opts.pointer ? ` aria-pressed="${!!l.passee}"` : ''}${opts.verrou ? ' disabled' : ''}>
-      ${opts.pointer ? `<span class="coche">${icone('coche', 3)}</span>` : ''}
-      ${opts.jour ? `<span class="jour">${l.jour != null ? 'le ' + l.jour : '—'}</span>` : ''}
-      <span class="nom">${esc(opts.nom || l.intitule)}${etiquettes.map(e => `<small>${e}</small>`).join('')}</span>
-      <span class="montant ${plus ? 'plus' : ''}">${plus ? '+' : '−'}${eur(montant)}</span>
-    </button>
-  </div>`;
-}
-
-const rentreesDabord = (a, b) => (a.type === 'Rentrée' ? 0 : 1) - (b.type === 'Rentrée' ? 0 : 1) || parJour(a, b);
-const avecOrdre = l => Object.assign({ ordre: (d.charges.find(x => x.id === l.charge) || {}).ordre }, l);
-const bloc = (titre, contenu, classe) =>
-  `<section class="bloc"><h3>${esc(titre)}</h3><div class="liste ${classe || ''}">${contenu}</div></section>`;
-
-/** Onglet Mois : un reporting à pointer, aucune modification ici (les dates restent dans le Sheet). */
-function vueMois() {
-  const courant = d.moisCourant, m = d.mois;
-  const premier = d.moisAvecDonnees[0] || courant;
-  const barre = `<div class="barre-mois">
-    <button class="rond" data-action="mois" data-m="${ajouterMois(m, -1)}" ${m <= premier ? 'disabled' : ''} aria-label="Mois précédent">${icone('gauche', 2.4)}</button>
-    <h2><button class="titre-mois" data-action="titre-mois" aria-label="${nomMois(m)} (3 touchers : graphique des dépenses)">${nomMois(m)}</button></h2>
-    <button class="rond" data-action="mois" data-m="${ajouterMois(m, 1)}" ${moisEntre(courant, m) >= 12 ? 'disabled' : ''} aria-label="Mois suivant">${icone('droite', 2.4)}</button>
-  </div>`;
-  if (!d.lignes.length) return barre + '<p class="vide">Rien pour ce mois : l’appli n’existait pas encore.</p>';
-
-  const ferme = cloture(m);
-  const bandeau = ferme ? `<div class="cloture">${icone('cadenas', 1.8)}
-    <span>Mois clôturé${ferme.date ? ' le ' + dateCourte(ferme.date) : ''}</span>
-    <button class="lien" data-action="rouvrir">Rouvrir</button></div>`
-    : toutCoche() ? `<div class="cloture">${icone('coche', 2)}<span>Tout est coché</span>
-    <button class="lien" data-action="cloturer">Clôturer le mois</button></div>` : '';
-  const c = calculerMois(d.lignes, d.personnes, d.arrondi);
-  const avecVirement = d.personnes.filter(p => c.pers[p].ligne);
-  const hero = `<div class="hero"><h3>À virer sur le compte joint</h3>
-    ${avecVirement.map(p => {
-      const v = c.pers[p];
-      return `<button class="virement ${v.ligne.passee ? 'fait' : ''}" data-action="pointer" data-id="${v.ligne.id}" aria-pressed="${!!v.ligne.passee}"${ferme ? ' disabled' : ''}>
-        <span class="coche">${icone('coche', 3)}</span><span class="qui">${esc(p)}</span><b>${eur(v.virement)}</b></button>`;
-    }).join('')}
-  </div>`;
-  const provisions = totalProvisions(m);
-  const tuiles = `<div class="tuiles">
-    <button class="tuile ouvre" data-action="solde"><span>Solde sur compte</span><b>${eur(r2(c.joint.resteAPrelever + provisions))}</b></button>
-    <button class="tuile ${ferme ? '' : 'ouvre'}" data-action="epargne"${ferme ? ' disabled' : ''}><span>Reste en fin de mois</span><b class="${c.joint.fin < 0 ? 'negatif' : ''}">${eur(c.joint.fin)}</b></button>
-  </div>`;
-
-  // Compte joint : virements, rentrées, puis charges dans l'ordre des prélèvements
-  const duJoint = d.lignes.filter(l => l.compte === 'Joint' && l.type !== 'Virement').map(avecOrdre).sort(rentreesDabord);
-  const plus = avecVirement.map(p => ligneHtml(Object.assign({}, c.pers[p].ligne, { type: 'Rentrée' }),
-    { pointer: true, verrou: !!ferme, nom: 'Virement de ' + p, montant: c.pers[p].virement }))
-    .concat(duJoint.filter(l => l.type === 'Rentrée').map(l => ligneHtml(l, { pointer: true, verrou: !!ferme })));
-  const moins = duJoint.filter(l => l.type !== 'Rentrée').map(l => ligneHtml(l, { pointer: true, verrou: !!ferme }));
-  let blocs = bloc('Compte joint', plus.join('') + (plus.length && moins.length ? '<div class="separateur" role="separator"></div>' : '') + moins.join(''), 'pointage');
-
-  // Comptes perso : seulement ce qui est payé depuis ce compte (ni salaire, ni virement)
-  d.personnes.forEach(p => {
-    const lignes = d.lignes.filter(l => l.compte === p && l.type === 'Charge').map(avecOrdre).sort(parJour);
-    if (lignes.length) blocs += bloc(p, lignes.map(l => ligneHtml(l, { pointer: true, verrou: !!ferme })).join(''), 'pointage');
+  if (!donnees) return;
+  const e = ecranCourant();
+  $('#titreEcran').textContent = TITRES[e];
+  document.querySelectorAll('.onglet').forEach(a => {
+    if (a.dataset.onglet === e) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
   });
-  return barre + bandeau + hero + tuiles + blocs;
+  const rendus = { prises: rendrePrises, reserve: rendreReserve, plan: rendrePlan, suivi: rendreSuivi };
+  $('#contenu').innerHTML = rendus[e]();
 }
 
-function vueCharges() {
-  const actives = d.charges.filter(c => c.active);
-  // Salaires en haut, dans une bulle par personne (toucher = modifier)
-  const salaires = `<div class="tuiles">${d.personnes.map(p => {
-    const s = actives.filter(c => c.compte === p && c.type === 'Rentrée');
-    return `<button class="tuile" data-action="${s.length ? 'charge' : 'ajouter-salaire'}" data-id="${s.length ? s[0].id : ''}" data-compte="${esc(p)}">
-      <span>Salaire ${esc(p)}</span><b>${s.length ? eur(somme(s)) : '—'}</b></button>`;
-  }).join('')}</div>`;
-  const blocs = comptes().map(compte => {
-    const liste = actives.filter(c => c.compte === compte && (compte === 'Joint' || c.type !== 'Rentrée')).sort(rentreesDabord);
-    if (compte !== 'Joint' && !liste.length) return '';
-    return bloc(nomCompte(compte), liste.map(c => ligneHtml(c, { action: 'charge', jour: compte === 'Joint', recurrence: true })).join('')
-      + `<button class="ajouter" data-action="ajouter-charge" data-compte="${esc(compte)}">+ Ajouter</button>`);
-  }).join('');
-  // Les charges arrêtées ne sont plus affichées (elles restent dans le Sheet).
-  const provisions = bloc('Provisions à mettre de côté', (d.provisions || []).map(pv => `<div class="ligne">
-      <button class="corps" data-action="provision" data-id="${pv.id}">
-        <span class="nom">${esc(pv.nom)}<small>${esc(echeanceProvision(pv))}</small></span>
-        <span class="montant">${eur(pv.mensuel)} / mois</span></button></div>`).join('')
-    + `<button class="ajouter" data-action="provision">+ Ajouter</button>`);
-  return salaires + blocs + provisions;
-}
 
-function vueCredits() {
-  const cartes = d.credits.map(c => {
-    const p = projeterCredit(c, d.moisCourant);
-    const ouvert = ouverts.has(c.id);
-    const rythme = p.tableau ? (p.echeances.length ? eur(p.echeances[0].paye) + ' la prochaine échéance' : '') : eur(c.mensualite) + ' par mois';
-    return `<div class="carte credit">
-      <div class="entete"><h4>${esc(c.nom)}</h4><b>${eur(p.aujourdhui)}</b></div>
-      ${p.tableau && p.totalRestant != null ? `<div class="total-restant">${eur(p.totalRestant)} au total restant à payer, intérêts compris</div>` : ''}
-      <div class="details">${p.sansDate ? 'Indique le mois de la 1re échéance (crayon) pour calculer l’échéancier.'
-        : p.aujourdhui > 0
-        ? `${rythme} · ${p.echeances.length} échéance${p.echeances.length > 1 ? 's' : ''} · fini en ${p.fin ? nomMois(p.fin) : '—'}`
-        : 'Remboursé'}${c.charge ? ' · payé par ' + esc((d.charges.find(x => x.id === c.charge) || {}).intitule || '?') : ''}${c.note ? ' · ' + esc(c.note) : ''}</div>
-      <div class="actions">
-        <button class="lien" data-action="echeancier" data-id="${c.id}">${ouvert ? 'Masquer' : 'Voir'} l’échéancier</button>
-        <button class="modifier" data-action="credit" data-id="${c.id}" aria-label="Modifier">${icone('crayon', 2)}</button>
-      </div>
-      ${ouvert ? `<table class="echeancier"><tr><th>Mois</th><th>Échéance</th><th>${p.tableau ? 'Capital restant' : 'Reste dû'}</th></tr>
-        <tr class="resume"><td><small>Début</small>${c.debut ? nomMois(c.debut) : '—'}</td>
-          <td><small>${p.tableau ? 'Capital remboursé' : 'Payé à ce jour'}</small>${c.initial != null ? eur(r2(c.initial - p.aujourdhui)) : '—'}</td>
-          <td><small>${p.tableau ? 'Capital restant' : 'Reste dû'}</small>${eur(p.aujourdhui)}</td></tr>
-        ${p.echeances.map(e => `<tr><td>${nomMois(e.mois)}</td><td>${eur(e.paye)}</td><td>${eur(e.reste)}</td></tr>`).join('')}</table>` : ''}
-    </div>`;
-  }).join('');
-  return `<div class="pile">${cartes}<div class="liste"><button class="ajouter" data-action="credit">+ Ajouter un crédit</button></div></div>`;
-}
+function rendrePrises() {
+  const t = dateCourante();
+  const dispo = !modifiable();
+  let mgPrevus = 0;
+  let mgPris = 0;
 
-function vueEpargne() {
-  return `<div class="pile">${d.epargne.map(e => {
-    const vs = versementsDe(e), s = partsEpargne(e, d.moisCourant);
-    return `<div class="carte credit">
-      <div class="entete"><h4>${esc(e.nom)}</h4><b>${eur(s.total)}</b></div>
-      <div class="details">${eur(s.mensuel)} depuis ${e.au ? nomMois(e.au) : '—'} (${eur(e.versement)} par mois)${s.ajoute ? ' + ' + eur(s.ajoute) + ' de versements ajoutés' : ''}</div>
-      ${vs.length ? `<div class="historique">${vs.map(v => `<button class="hist" data-action="versement" data-id="${v.id}">
-        <span>${v.date ? dateCourte(v.date) : 'Sans date'}${v.note ? `<small>${esc(v.note)}</small>` : ''}</span><b>+${eur(v.montant)}</b></button>`).join('')}</div>` : ''}
-      <div class="actions"><button class="lien" data-action="ajouter-versement" data-epargne="${e.id}">+ Ajouter un versement</button></div>
-    </div>`;
-  }).join('')}</div>`;
-}
-
-function vueImpots() {
-  if (!anneeImpots) anneeImpots = Number(d.moisCourant.slice(0, 4));
-  const annees = [...new Set(d.impots.map(i => i.annee).concat(d.fraisKm.map(k => k.annee))
-    .concat([Number(d.moisCourant.slice(0, 4)), anneeImpots]).filter(Boolean))].sort();
-  const puces = `<div class="annees">${annees.map(a => `<button class="puce ${a === anneeImpots ? 'actif' : ''}" data-action="annee" data-a="${a}">${a}</button>`).join('')}
-    <button class="puce" data-action="annee-plus" aria-label="Année suivante">+</button>
-    <button class="puce recap" data-action="recap-impots" aria-label="Récapitulatif pour la déclaration">${icone('coche', 2.2)}</button></div>`;
-  const lignes = d.impots.filter(i => i.annee === anneeImpots);
-  const enfants = [...new Set(d.enfants.concat(lignes.map(i => i.pour).filter(Boolean)))];
-  const blocs = enfants.map(enfant => {
-    const siens = lignes.filter(i => i.pour === enfant);
-    const rubriques = [...new Set(RUBRIQUES_IMPOTS.concat(siens.map(i => i.rubrique)))];
-    return bloc(enfant, rubriques.map(r => {
-      const entrees = siens.filter(i => i.rubrique === r);
-      return `<div class="rubrique">
-        <div class="ligne"><button class="corps" data-action="impot-ajout" data-pour="${esc(enfant)}" data-rubrique="${esc(r)}">
-          <span class="nom"><b>${esc(r)}</b></span><span class="montant">${eur(somme(entrees))}</span><span class="plus-rond">+</span></button></div>
-        ${entrees.map(i => `<div class="ligne sous"><button class="corps" data-action="impot" data-id="${i.id}">
-          <span class="nom">${i.date ? dateCourte(i.date) : 'Sans date'}${i.note ? `<small>${esc(i.note)}</small>` : ''}</span>
-          <span class="montant">${eur(i.montant)}</span></button></div>`).join('')}
+  const blocs = MOMENTS_LIST.map(m => {
+    const plan = planActuel(m, t);
+    if (!plan) return '';
+    const lignes = GRAMMAGES_LIST.map(g => {
+      const prevu = g === 20 ? plan.g20 : plan.g10;
+      if (!prevu) return ''; // seulement les gélules prévues par le plan
+      const prise = donnees.Prises.find(x => x.date === t && x.moment === m && x.grammage === g);
+      const pris = !!(prise && prise.statut === 'pris');
+      const quantite = pris ? prise.quantite : Math.min(prevu, 5);
+      mgPrevus += prevu * g;
+      if (pris) mgPris += prise.quantite * g;
+      const options = [1, 2, 3, 4, 5].map(n =>
+        `<option value="${n}" ${n === quantite ? 'selected' : ''}>${n}</option>`).join('');
+      const attr = dispo ? 'disabled' : '';
+      return `<div class="ligne ligne-prise${pris ? ' fait' : ''}">
+        <div class="ligne-haut">
+          <span class="nom-gelule">Gélules de ${g} mg</span>
+          <label class="quantite-choix"><span class="discret">Nombre</span>
+            <select class="champ quantite" data-moment="${m}" data-grammage="${g}" ${attr}>${options}</select>
+          </label>
+        </div>
+        <div class="ligne-bas">
+          <span class="discret">${pris ? `Pris : ${quantite} gélule${quantite > 1 ? 's' : ''}` : 'À prendre'}</span>
+          <div class="segments">
+            <button class="segment" data-action="statut" data-moment="${m}" data-grammage="${g}" data-statut="pris" aria-pressed="${pris}" ${attr}>Pris</button>
+          </div>
+        </div>
       </div>`;
-    }).join(''));
+    }).join('');
+    return `<section class="section">
+      <h2 class="titre-section">${MOMENTS[m]}</h2>
+      <div class="liste">${lignes}</div>
+    </section>`;
   }).join('');
-  const km = d.fraisKm.filter(k => k.annee === anneeImpots);
-  const blocKm = bloc('Frais réels (kilomètres)', km.map(k => `<div class="ligne"><button class="corps" data-action="km" data-id="${k.id}">
-      <span class="nom">${esc(k.personne)}<small>${k.kmJour || 0} km/jour × ${k.jours != null ? k.jours : '?'} jours</small></span>
-      <span class="montant">${k.jours != null ? ((k.kmJour || 0) * k.jours).toLocaleString('fr-FR') + ' km' : '—'}</span></button></div>`).join('')
-    + `<button class="ajouter" data-action="km">+ Ajouter une personne</button>`);
-  return puces + blocs + blocKm;
+
+  const complet = mgPrevus > 0 && mgPris >= mgPrevus;
+  return `
+    <section class="section">
+      <div class="bulle-wrap">
+        <div class="carte-principale bulle-centree bulle-bouton">
+          <div class="jour">${esc(parseDate(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>
+          <div class="chiffre">${mgPris} mg sur ${mgPrevus} mg</div>
+          ${complet ? '<div class="precision">Le traitement du jour est complet.</div>' : ''}
+        </div>
+        <input type="date" id="choixJour" class="choix-date" value="${t}" min="${premierJour()}" max="${donnees.aujourdhui}" aria-label="Choisir un autre jour">
+      </div>
+      ${!estAujourdhui() ? `<p class="discret" style="text-align:center;margin:10px 0 0">${dispo
+        ? 'Journée trop ancienne, consultation seulement.'
+        : 'Jour passé : vous pouvez corriger les prises (7 jours maximum).'}
+        <button class="lien" data-action="jour-aujourdhui">Revenir à aujourd’hui</button></p>` : ''}
+    </section>
+    ${blocs || '<p class="discret">Aucun plan en cours.</p>'}`;
 }
 
-// ====== Fenêtre de saisie ======
+function rendreReserve() {
+  const t = donnees.aujourdhui;
+  const jr = joursAffiches();
+  const rdv = prochainRdv();
+  const securite = joursSecurite();
+  const fin = jr !== null && jr > 0 ? ajouterJours(t, jr - 1) : t;
 
-const fenetre = document.getElementById('fenetre');
-const formulaire = document.getElementById('formulaire');
-let fenetreCourante = null;
+  const lignesBulle = [];
+  if (jr === null) lignesBulle.push('Aucun plan en cours.');
+  else if (jr === 0) lignesBulle.push('Il ne vous reste plus de gélules pour le traitement.');
+  else lignesBulle.push(`Il vous reste ${jr} jour${jr > 1 ? 's' : ''} de traitement, jusqu’au ${joliDate(fin)}.`);
 
-/** champs : [{ k, label, type: texte|montant|nombre|mois|date|case|choix|liste, valeur, options, aide, vide }] */
-function ouvrir(def) {
-  fenetreCourante = def;
-  formulaire.innerHTML = `<h3>${esc(def.titre)}</h3>
-    ${def.texte ? `<p class="aide" style="margin:0 0 12px">${esc(def.texte)}</p>` : ''}
-    ${def.champs.map(champHtml).join('')}
-    <p class="erreur" id="erreur" hidden></p>
-    <div class="boutons">
-      ${def.supprimer ? `<button type="button" class="bouton danger" data-action="f-supprimer">${esc(def.libelleSupprimer || 'Supprimer')}</button>` : ''}
-      <span class="espace"></span>
-      <button type="button" class="bouton" data-action="f-annuler">${esc(def.libelleAnnuler || 'Annuler')}</button>
-      <button type="submit" class="bouton principal">${esc(def.libelleValider || 'Enregistrer')}</button>
-    </div>`;
-  if (!fenetre.open) fenetre.showModal();
-  const premier = formulaire.querySelector('input:not([type="checkbox"]), select');
-  if (premier && !matchMedia('(pointer: coarse)').matches) premier.focus();
-}
-
-function champHtml(c) {
-  const v = c.valeur == null ? '' : c.valeur;
-  const nom = `name="${c.k}"`;
-  let entree;
-  if (c.type === 'case') {
-    return `<label class="champ case"><input type="checkbox" ${nom} ${v ? 'checked' : ''}><span>${esc(c.label)}</span></label>${c.aide ? `<p class="aide">${esc(c.aide)}</p>` : ''}`;
-  }
-  if (c.type === 'mois12') {
-    const choisis = moisListe(v), tous = !choisis.length;
-    return `<div class="champ"><span>${esc(c.label)}</span><div class="mois12">${MOIS_COURTS.map((m, i) =>
-      `<label><input type="checkbox" name="${c.k}" value="${i + 1}" ${tous || choisis.indexOf(i + 1) >= 0 ? 'checked' : ''}><span>${m}</span></label>`).join('')}</div></div>`;
-  }
-  if (c.type === 'choix') {
-    entree = `<select ${nom}>${c.options.map(o => `<option value="${esc(o[0])}" ${String(o[0]) === String(v) ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
-  } else if (c.type === 'montant') {
-    entree = `<input ${nom} inputmode="decimal" autocomplete="off" value="${v === '' ? '' : String(v).replace('.', ',')}" placeholder="${esc(c.vide || '0,00')}">`;
-  } else if (c.type === 'nombre') {
-    entree = `<input ${nom} inputmode="numeric" autocomplete="off" value="${esc(v)}" placeholder="${esc(c.vide || '')}">`;
-  } else if (c.type === 'mois') {
-    entree = `<input ${nom} type="month" value="${esc(v)}">`;
-  } else if (c.type === 'date') {
-    entree = `<input ${nom} type="date" value="${esc(v)}">`;
-  } else if (c.type === 'liste') {
-    entree = `<input ${nom} list="l-${c.k}" autocomplete="off" value="${esc(v)}"><datalist id="l-${c.k}">${c.options.map(o => `<option value="${esc(o)}">`).join('')}</datalist>`;
+  if (rdv === null) {
+    lignesBulle.push('Indiquez la date de votre prochain rendez-vous dans Suivi médical.');
+  } else if (jr !== null && rdv > fin) {
+    const sans = Math.max(joursEntre(fin, rdv), 0);
+    lignesBulle.push(`Sans traitement pendant ${sans} jour${sans > 1 ? 's' : ''}, avant le rendez-vous du ${joliDate(rdv)}.`);
   } else {
-    entree = `<input ${nom} autocomplete="off" value="${esc(v)}">`;
+    lignesBulle.push(`Prochain rendez-vous : ${joliDate(rdv)}.`);
   }
-  return `<label class="champ"><span>${esc(c.label)}</span>${entree}</label>${c.aide ? `<p class="aide">${esc(c.aide)}</p>` : ''}`;
+
+  // Jours à couvrir jusqu'au rendez-vous (jour compris), plus la sécurité
+  const besoin = rdv ? Math.max(joursEntre(t, rdv), 0) + securite : null;
+  const lignes = GRAMMAGES_LIST.map(g => {
+    let info = '';
+    if (besoin !== null) {
+      const manque = Math.max(parJour(g) * besoin - reste(g), 0);
+      info = manque > 0
+        ? `<span class="manque">Il manque ${manque} gélule${manque > 1 ? 's' : ''} pour tenir jusqu’au rendez-vous</span>`
+        : '<span class="discret">Assez pour tenir jusqu’au rendez-vous</span>';
+    }
+    return `<div class="ligne">
+      <span class="libelle"><span>Gélules de ${g} mg</span>${info ? `<span style="display:block">${info}</span>` : ''}</span>
+      <span class="grand-chiffre">${reste(g)}</span>
+    </div>`;
+  }).join('');
+
+  const recents = donnees.Stock.slice().sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10)
+    .map(s => `
+      <div class="ligne">
+        <span class="libelle"><span>${s.quantite} gélules de ${s.grammage} mg</span>
+          <span class="discret" style="display:block">${esc(joliDate(s.date))} · ${esc(s.motif)}</span></span>
+        <button class="croix-supprimer" data-action="suppr-stock" data-id="${esc(s.id)}" aria-label="Supprimer cet ajout">×</button>
+      </div>`).join('');
+
+  return `
+    <section class="section">
+      <div class="carte-principale bulle-centree">
+        ${lignesBulle.map(l => `<div class="ligne-bulle">${esc(l)}</div>`).join('')}
+      </div>
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Dans la boîte</h2>
+      <div class="liste">
+        ${lignes}
+        <div class="ligne">
+          <span class="libelle"><span>Jours de sécurité</span>
+            <span class="discret" style="display:block">${securite} jour${securite > 1 ? 's' : ''} de marge si la reprise est retardée</span></span>
+          <button class="bouton bouton-secondaire" data-action="ajout-securite" style="min-height:40px;padding:0 14px">Modifier</button>
+        </div>
+      </div>
+    </section>
+    <section class="section">
+      <button class="bouton bouton-principal" style="width:100%" data-action="ajout-stock">Ajouter des gélules</button>
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Derniers ajouts</h2>
+      <div class="liste">${recents || '<div class="ligne discret">Aucun ajout pour le moment.</div>'}</div>
+    </section>`;
 }
 
-function lireNombre(s) {
-  s = String(s || '').replace(/\s|€/g, '').replace(',', '.');
-  if (s === '') return null;
-  const x = Number(s);
-  return isFinite(x) ? x : NaN;
+function rendrePlan() {
+  const t = donnees.aujourdhui;
+  const lignes = MOMENTS_LIST.map(m => {
+    const p = planActuel(m, t);
+    if (!p) return '';
+    return `<div class="ligne">
+      <span class="libelle">${MOMENTS[m]}</span>
+      <span class="valeur">${detail(p.g20, p.g10)} · ${p.g20 * 20 + p.g10 * 10} mg</span>
+    </div>`;
+  }).join('');
+
+  const historique = donnees.Plans.slice()
+    .sort((a, b) => (a.date_debut < b.date_debut ? 1 : -1))
+    .slice(0, 20)
+    .map(p => `<div class="ligne">
+      <span class="libelle"><span>${esc(joliDate(p.date_debut))} · ${MOMENTS[p.moment]}</span>
+        <span class="discret" style="display:block">${detail(p.g20, p.g10)} — ${esc(p.motif)}</span></span>
+      <button class="croix-supprimer" data-action="suppr-plan" data-id="${esc(p.id)}" aria-label="Supprimer ce changement">×</button>
+    </div>`).join('');
+
+  return `
+    <section class="section">
+      <h2 class="titre-section">Plan actuel</h2>
+      <div class="liste">${lignes}</div>
+      <button class="bouton bouton-principal" style="width:100%;margin-top:16px" data-action="modifier-plan">Modifier le plan</button>
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Historique des changements</h2>
+      <div class="carte carte-sans-marge">${historique || '<div class="ligne discret">Aucun changement.</div>'}</div>
+    </section>`;
 }
 
-formulaire.addEventListener('submit', e => {
-  e.preventDefault();
-  const def = fenetreCourante, valeurs = {};
-  for (const c of def.champs) {
-    const el = formulaire.elements[c.k];
-    if (c.type === 'mois12') {
-      const coches = [...formulaire.querySelectorAll(`input[name="${c.k}"]:checked`)].map(x => Number(x.value));
-      if (!coches.length) return erreur('Choisis au moins un mois.');
-      valeurs[c.k] = coches.length === 12 ? '' : coches.join(';');
-    } else if (c.type === 'case') valeurs[c.k] = el.checked;
-    else if (c.type === 'montant' || c.type === 'nombre') {
-      const x = lireNombre(el.value);
-      if (Number.isNaN(x)) return erreur(`« ${c.label} » : nombre attendu.`);
-      if (x == null && c.obligatoire) return erreur(`« ${c.label} » est à remplir.`);
-      if (c.k === 'jour' && x != null && (x < 1 || x > 31 || x % 1)) return erreur('Le jour va de 1 à 31.');
-      if (c.k === 'annee' && x != null && (x < 2000 || x > 2099 || x % 1)) return erreur('Année entre 2000 et 2099.');
-      valeurs[c.k] = x;
+function rendreSuivi() {
+  const t = donnees.aujourdhui;
+  const p = prescriptionActuelle();
+  const rdv = prochainRdv();
+  let bloc = '<p class="discret">Aucune ordonnance enregistrée.</p>';
+
+  if (p) {
+    const fin = ajouterJours(p.date_debut, p.duree - 1);
+    const jr = joursAffiches();
+    const finStock = jr !== null && jr > 0 ? ajouterJours(t, jr - 1) : t;
+    const limite = finStock < fin ? finStock : fin;
+    const restant = joursEntre(t, limite);
+    let rappel;
+    if (restant < 0) {
+      rappel = 'Le traitement est arrivé à son terme. Pensez à prendre rendez-vous avec votre psychiatre pour la suite.';
+    } else if (restant <= 14) {
+      rappel = `Pensez à prendre rendez-vous avec votre psychiatre : il reste environ ${restant} jour${restant > 1 ? 's' : ''} de traitement.`;
     } else {
-      valeurs[c.k] = el.value.trim();
-      if (!valeurs[c.k] && c.obligatoire) return erreur(`« ${c.label} » est à remplir.`);
+      rappel = 'Tout est en ordre pour le moment.';
     }
+    bloc = `
+      <div class="carte">
+        <div style="font-weight:600">Ordonnance en cours</div>
+        <p style="margin:6px 0 0">${p.g20} gélules de 20 mg et ${p.g10} gélules de 10 mg, pour ${p.duree} jours.</p>
+        <p style="margin:12px 0 0">${esc(rappel)}</p>
+        <button class="bouton bouton-secondaire" style="width:100%;margin-top:14px" data-action="nouvelle-ordonnance">Ajouter une nouvelle ordonnance</button>
+      </div>`;
   }
-  if (def.verifier) { const pb = def.verifier(valeurs); if (pb) return erreur(pb); }
-  fenetre.close();
-  def.valider(valeurs);
-});
-function erreur(t) { const p = document.getElementById('erreur'); p.textContent = t; p.hidden = false; }
 
-// ====== Fenêtres de chaque élément ======
+  const docs = (donnees.Documents || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1))
+    .map(d => `<div class="ligne">
+      <a class="libelle lien-doc" href="https://drive.google.com/file/d/${esc(d.fichier)}/view" target="_blank" rel="noopener">
+        <span>${esc(d.nom)}</span><span class="discret" style="display:block">${esc(joliDate(d.date))}</span>
+      </a>
+      <button class="croix-supprimer" data-action="suppr-doc" data-id="${esc(d.id)}" aria-label="Supprimer ce document">×</button>
+    </div>`).join('');
 
-function fenetreCharge(ch, compte, defauts) {
-  defauts = defauts || {};
-  ouvrir({
-    titre: ch ? ch.intitule : 'Nouvelle ligne · ' + nomCompte(compte),
-    champs: [
-      { k: 'intitule', label: 'Intitulé', valeur: ch ? ch.intitule : defauts.intitule || '', obligatoire: true },
-      { k: 'type', label: 'Type', type: 'choix', valeur: ch ? ch.type : defauts.type || 'Charge', options: [['Charge', 'Dépense'], ['Rentrée', 'Rentrée']] },
-      { k: 'montant', label: 'Montant (€)', type: 'montant', valeur: ch ? ch.montant : null, obligatoire: true },
-      { k: 'jour', label: 'Jour du mois', type: 'nombre', valeur: ch ? ch.jour : null, vide: 'non renseigné' },
-      { k: 'recurrence', label: 'Mois de prélèvement', type: 'mois12', valeur: ch ? ch.recurrence : '' },
-      { k: 'partagee', label: 'Commune (comptée dans la part de chacun)', type: 'case', valeur: ch ? ch.partagee : compte === 'Joint',
-        aide: 'Pour une rentrée commune (CAF…) : elle diminue la part de chacun.' },
-      { k: 'active', label: 'Active', type: 'case', valeur: ch ? ch.active : true },
-      { k: 'note', label: 'Note', valeur: ch ? ch.note : '' }
-    ],
-    supprimer: ch && ch.active ? () => effacer('Charges', ch.id) : null,
-    libelleSupprimer: 'Arrêter',
-    valider: v => {
-      const ordre = ch ? ch.ordre : d.charges.reduce((m, x) => Math.max(m, x.ordre || 0), 0) + 1;
-      sauver('Charges', Object.assign({ compte }, ch || {}, v, { ordre }));
+  const sautees = donnees.Prises.filter(x => x.statut === 'saute')
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, 20)
+    .map(x => `<div class="ligne">
+      <span class="libelle"><span>${esc(joliDate(x.date))} · ${MOMENTS[x.moment]}</span>
+        <span class="discret" style="display:block">${x.quantite} gélule${x.quantite > 1 ? 's' : ''} de ${x.grammage} mg non prise${x.quantite > 1 ? 's' : ''}</span></span>
+    </div>`).join('');
+
+  const notes = donnees.Notes.slice().sort((a, b) => (a.date < b.date ? 1 : -1))
+    .map(n => `<div class="ligne" style="align-items:flex-start">
+      <span class="libelle"><span style="white-space:pre-wrap">${esc(n.texte)}</span>
+        <span class="discret" style="display:block">${esc(joliDate(n.date))}</span></span>
+      <button class="croix-supprimer" data-action="suppr-note" data-id="${esc(n.id)}" aria-label="Supprimer cette note">×</button>
+    </div>`).join('');
+
+  return `
+    <section class="section">
+      <h2 class="titre-section">Ordonnance</h2>
+      ${bloc}
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Prochain rendez-vous</h2>
+      <div class="carte">
+        <div style="font-weight:600">${rdv ? esc(joliDate(rdv)) : 'Pas encore indiqué'}</div>
+        <button class="bouton bouton-secondaire" style="width:100%;margin-top:14px" data-action="ajout-rdv">${rdv ? 'Modifier la date' : 'Indiquer la date du rendez-vous'}</button>
+      </div>
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Document de l'ordonnance</h2>
+      <div class="liste">${docs || '<div class="ligne discret">Aucun document pour le moment.</div>'}</div>
+      <label class="bouton bouton-principal fichier-label" style="width:100%;margin-top:12px">
+        Ajouter une photo ou un document
+        <input type="file" id="fichierDoc" class="fichier-cache" accept="image/*,application/pdf">
+      </label>
+      <p id="infoDoc" class="discret" style="text-align:center;margin:8px 0 0" hidden></p>
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Prises non prises (suivi)</h2>
+      <div class="liste">${sautees || '<div class="ligne discret">Aucune prise non prise pour le moment.</div>'}</div>
+    </section>
+    <section class="section">
+      <h2 class="titre-section">Notes pour le rendez-vous</h2>
+      <div class="carte">
+        <label class="champ-etiquette" for="champNote">Comment vous sentez-vous, effets, questions à poser…</label>
+        <textarea id="champNote" class="champ" rows="3"></textarea>
+        <button class="bouton bouton-principal" style="width:100%;margin-top:12px" data-action="ajout-note">Ajouter la note</button>
+      </div>
+      <div class="liste" style="margin-top:16px">${notes || '<div class="ligne discret">Aucune note pour le moment.</div>'}</div>
+    </section>`;
+}
+
+// ---------- Fenêtres de saisie ----------
+
+function ouvrirFormulaire(titre, champs, valider) {
+  const dlg = $('#dlg');
+  const html = champs.map(c => {
+    const id = 'c_' + c.nom;
+    let input;
+    if (c.options) {
+      input = `<select class="champ" id="${id}">${c.options.map(o =>
+        `<option value="${esc(o.v)}" ${o.v === c.valeur ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select>`;
+    } else {
+      input = `<input class="champ" id="${id}" type="${c.type || 'text'}" value="${esc(c.valeur ?? '')}"
+        ${c.inputmode ? `inputmode="${c.inputmode}"` : ''} autocomplete="off">`;
     }
+    return `<div style="margin-bottom:14px"><label class="champ-etiquette" for="${id}">${esc(c.label)}</label>${input}</div>`;
+  }).join('');
+
+  $('#dlgContenu').innerHTML = `
+    <h2 style="font-size:18px;font-weight:600;margin:0 0 16px;text-align:center">${esc(titre)}</h2>
+    <form id="fdlg">
+      ${html}
+      <p id="erreurDlg" class="discret" style="color:var(--alerte);min-height:18px;text-align:center"></p>
+      <div style="display:flex;gap:10px">
+        <button type="button" class="bouton bouton-secondaire" id="annuler" style="flex:1">Annuler</button>
+        <button class="bouton bouton-principal" style="flex:1">Enregistrer</button>
+      </div>
+    </form>`;
+
+  $('#annuler').onclick = () => dlg.close();
+  $('#fdlg').onsubmit = e => {
+    e.preventDefault();
+    const v = {};
+    champs.forEach(c => { v[c.nom] = $('#c_' + c.nom).value; });
+    const err = valider(v);
+    if (err) { $('#erreurDlg').textContent = err; return; }
+    dlg.close();
+  };
+  dlg.showModal();
+}
+
+function ouvrirSecurite() {
+  ouvrirFormulaire('Jours de sécurité', [
+    { nom: 'jours', label: 'Nombre de jours de marge (0 à 14)', inputmode: 'numeric', valeur: joursSecurite() }
+  ], v => {
+    const n = parseInt(v.jours, 10);
+    if (isNaN(n) || n < 0 || n > 14) return 'Indiquez un nombre entre 0 et 14.';
+    enregistrer('definirSecurite', { jours: n }, () => {
+      donnees.Reglages = (donnees.Reglages || []).filter(x => x.cle !== 'jours_securite');
+      donnees.Reglages.push({ id: 'jours_securite', cle: 'jours_securite', valeur: n });
+    });
   });
 }
 
-function fenetreCredit(c) {
-  const tableau = !!(c && echeancesDe(c).length);
-  ouvrir({
-    titre: c ? c.nom : 'Nouveau crédit',
-    champs: [
-      { k: 'nom', label: 'Nom', valeur: c ? c.nom : '', obligatoire: true },
-      { k: 'initial', label: 'Montant emprunté (€)', type: 'montant', valeur: c ? c.initial : null },
-      { k: 'debut', label: tableau ? 'Mois de la 1re échéance' : 'Date de début', type: 'mois', valeur: c ? c.debut : '', obligatoire: tableau },
-    ].concat(tableau ? [] : [
-      { k: 'restant', label: 'Restant dû aujourd’hui (€)', type: 'montant', valeur: c ? projeterCredit(c, d.moisCourant).aujourdhui : null, obligatoire: true },
-      { k: 'mensualite', label: 'Mensualité (€)', type: 'montant', valeur: c ? c.mensualite : null, obligatoire: true }
-    ]).concat([
-      { k: 'charge', label: 'Payé par', type: 'choix', valeur: c ? c.charge : '', options: [['', 'Géré à la main']].concat(
-        d.charges.filter(x => x.type === 'Charge' && (x.active || (c && x.id === c.charge)))
-          .sort((a, b) => String(a.intitule).localeCompare(b.intitule)).map(x => [x.id, x.intitule])) },
-      { k: 'note', label: 'Note', valeur: c ? c.note : '' }
-    ]),
-    texte: tableau
-      ? 'Échéances issues du tableau d’amortissement (intérêts + amortissement, sans l’assurance). Quand tu coches son paiement dans l’onglet Mois, l’échéance passe dans le capital remboursé.'
-      : 'Relié à une charge : le restant dû baisse quand tu coches son paiement dans l’onglet Mois. Géré à la main : il baisse tout seul chaque mois.',
-    supprimer: c ? () => { if (confirm('Supprimer ' + c.nom + ' ?')) effacer('Crédits', c.id); } : null,
-    valider: v => {
-      const credit = Object.assign({}, c || {}, v);
-      if (tableau) {
-        credit.au = c.au;   // les échéances payées viennent du tableau et des coches
-      } else if (v.charge) {
-        // Le restant saisi tient compte des paiements déjà cochés : on part du dernier
-        const mois = paiementsCoches(v.charge).map(p => p.mois);
-        let au = mois.length ? mois[mois.length - 1] : ajouterMois(d.moisCourant, -1);
-        if (c && c.charge === v.charge && c.au && c.au > au) au = c.au;
-        credit.au = au;
-      } else {
-        credit.au = d.moisCourant;
+function ouvrirRdv() {
+  const rdv = prochainRdv();
+  ouvrirFormulaire('Prochain rendez-vous', [
+    { nom: 'date', label: 'Date du rendez-vous', type: 'date', valeur: rdv || donnees.aujourdhui },
+    { nom: 'note', label: 'Note (facultatif)' }
+  ], v => {
+    if (!v.date) return 'Indiquez la date du rendez-vous.';
+    enregistrer('ajouterRdv', { date: v.date, note: v.note.trim() }, () => {
+      donnees.RendezVous = donnees.RendezVous || [];
+      donnees.RendezVous.push({ id: 'tmp-' + Date.now(), date: v.date, note: v.note.trim() });
+    });
+  });
+}
+
+function ouvrirAjoutStock() {
+  ouvrirFormulaire('Ajouter des gélules', [
+    { nom: 'grammage', label: 'Dosage', options: [{ v: '20', l: '20 mg' }, { v: '10', l: '10 mg' }], valeur: '20' },
+    { nom: 'quantite', label: 'Nombre de gélules', inputmode: 'numeric' },
+    { nom: 'date', label: 'Date', type: 'date', valeur: donnees.aujourdhui },
+    { nom: 'motif', label: 'Pourquoi', options: [
+      { v: 'Nouvelle ordonnance', l: 'Nouvelle ordonnance' },
+      { v: 'Retrouvée', l: 'Retrouvées' },
+      { v: 'Autre', l: 'Autre' }
+    ], valeur: 'Nouvelle ordonnance' }
+  ], v => {
+    const q = parseInt(v.quantite, 10);
+    if (!(q > 0)) return 'Indiquez un nombre de gélules.';
+    if (!v.date) return 'Indiquez la date.';
+    const grammage = Number(v.grammage);
+    enregistrer('ajouterStock', { grammage, quantite: q, date: v.date, motif: v.motif }, () => {
+      donnees.Stock.push({ id: 'tmp-' + Date.now(), date: v.date, grammage, quantite: q, motif: v.motif, note: '' });
+    });
+  });
+}
+
+function ouvrirModifierPlan() {
+  const t = donnees.aujourdhui;
+  const pm = planActuel('matin', t) || { g20: 0, g10: 0 };
+  const ps = planActuel('soir', t) || { g20: 0, g10: 0 };
+  ouvrirFormulaire('Modifier le plan', [
+    { nom: 'm20', label: 'Matin : gélules de 20 mg', inputmode: 'numeric', valeur: pm.g20 },
+    { nom: 'm10', label: 'Matin : gélules de 10 mg', inputmode: 'numeric', valeur: pm.g10 },
+    { nom: 's20', label: 'Après-midi : gélules de 20 mg', inputmode: 'numeric', valeur: ps.g20 },
+    { nom: 's10', label: 'Après-midi : gélules de 10 mg', inputmode: 'numeric', valeur: ps.g10 },
+    { nom: 'date', label: 'À partir du', type: 'date', valeur: t },
+    { nom: 'motif', label: 'Pourquoi ce changement' },
+    { nom: 'auteur', label: 'Décidé par' }
+  ], v => {
+    const nombres = ['m20', 'm10', 's20', 's10'].map(k => parseInt(v[k], 10));
+    if (nombres.some(x => isNaN(x) || x < 0)) return 'Indiquez un nombre (0 ou plus) pour chaque case.';
+    if (!v.date) return 'Indiquez la date du changement.';
+    if (!v.motif.trim()) return 'Expliquez le changement dans « Pourquoi ce changement ».';
+    const plans = [
+      { moment: 'matin', g20: nombres[0], g10: nombres[1] },
+      { moment: 'soir', g20: nombres[2], g10: nombres[3] }
+    ];
+    enregistrer('changerPlan', { date: v.date, motif: v.motif.trim(), auteur: v.auteur.trim(), plans }, () => {
+      plans.forEach(p => donnees.Plans.push({
+        id: 'tmp-' + p.moment + Date.now(), date_debut: v.date, motif: v.motif.trim(), decide_par: v.auteur.trim(), ...p
+      }));
+    });
+  });
+}
+
+function ouvrirNouvelleOrdonnance() {
+  ouvrirFormulaire('Nouvelle ordonnance', [
+    { nom: 'date', label: 'Date de début', type: 'date', valeur: donnees.aujourdhui },
+    { nom: 'duree', label: 'Durée (jours)', inputmode: 'numeric', valeur: '28' },
+    { nom: 'g20', label: 'Gélules de 20 mg', inputmode: 'numeric', valeur: '28' },
+    { nom: 'g10', label: 'Gélules de 10 mg', inputmode: 'numeric', valeur: '56' },
+    { nom: 'stock', label: 'Ajouter ces gélules à la réserve ?', options: [
+      { v: 'oui', l: 'Oui' }, { v: 'non', l: 'Non' }
+    ], valeur: 'oui' }
+  ], v => {
+    const duree = parseInt(v.duree, 10);
+    const g20 = parseInt(v.g20, 10);
+    const g10 = parseInt(v.g10, 10);
+    if (!v.date) return 'Indiquez la date de début.';
+    if (!(duree > 0) || isNaN(g20) || isNaN(g10) || g20 < 0 || g10 < 0) return 'Vérifiez les nombres saisis.';
+    const ajouterStock = v.stock === 'oui';
+    enregistrer('nouvellePrescription', { date_debut: v.date, duree, g20, g10, ajouterStock }, () => {
+      donnees.Prescriptions.push({ id: 'tmp-' + Date.now(), date_debut: v.date, duree, g20, g10, note: '' });
+      if (ajouterStock) {
+        if (g20 > 0) donnees.Stock.push({ id: 'tmp-s20-' + Date.now(), date: v.date, grammage: 20, quantite: g20, motif: 'Nouvelle ordonnance', note: '' });
+        if (g10 > 0) donnees.Stock.push({ id: 'tmp-s10-' + Date.now(), date: v.date, grammage: 10, quantite: g10, motif: 'Nouvelle ordonnance', note: '' });
       }
-      sauver('Crédits', credit);
-    }
+    });
   });
 }
 
-function fenetreVersement(v, livret) {
-  const e = d.epargne.find(x => x.id === (v ? v.epargne : livret));
-  ouvrir({
-    titre: 'Versement · ' + (e ? e.nom : ''),
-    champs: [
-      { k: 'montant', label: 'Montant (€)', type: 'montant', valeur: v ? v.montant : null, obligatoire: true },
-      { k: 'date', label: 'Date', type: 'date', valeur: v ? v.date : aujourdhuiIso(), obligatoire: true },
-      { k: 'note', label: 'Note', valeur: v ? v.note : '' }
-    ],
-    supprimer: v ? () => effacer('Versements', v.id) : null,
-    valider: x => sauver('Versements', Object.assign({ epargne: livret }, v || {}, x))
+// ---------- Actions de l'utilisateur ----------
+
+// Nombre de gélules choisi : enregistre la prise comme « Pris » avec ce nombre
+function enregistrerQuantite(sel) {
+  if (!modifiable()) return;
+  const t = dateCourante();
+  const m = sel.dataset.moment;
+  const g = Number(sel.dataset.grammage);
+  const q = Number(sel.value);
+  enregistrer('enregistrerPrise', { date: t, moment: m, grammage: g, statut: 'pris', quantite: q }, () => {
+    donnees.Prises = donnees.Prises.filter(x => !(x.date === t && x.moment === m && x.grammage === g));
+    donnees.Prises.push({ id: 'tmp-' + m + g + Date.now(), date: t, moment: m, grammage: g, quantite: q, statut: 'pris' });
   });
 }
 
-function fenetreImpot(i, pour, rubrique) {
-  pour = i ? i.pour : pour; rubrique = i ? i.rubrique : rubrique;
-  ouvrir({
-    titre: rubrique + ' · ' + pour + ' · ' + (i ? i.annee : anneeImpots),
-    champs: [
-      { k: 'montant', label: 'Montant (€)', type: 'montant', valeur: i ? i.montant : null, obligatoire: true },
-      { k: 'date', label: 'Date (facultatif)', type: 'date', valeur: i ? i.date : '' },
-      { k: 'note', label: 'Note', valeur: i ? i.note : '' }
-    ],
-    supprimer: i ? () => effacer('Impôts', i.id) : null,
-    valider: v => sauver('Impôts', Object.assign({ annee: anneeImpots, pour, rubrique }, i || {}, v))
+// Touche « Pris » ou « Pas pris ». Toucher à nouveau le choix déjà actif l'annule.
+function changerStatut(b) {
+  if (!modifiable()) return;
+  const t = dateCourante();
+  const m = b.dataset.moment;
+  const g = Number(b.dataset.grammage);
+  const demande = b.dataset.statut;
+  const actuelle = donnees.Prises.find(x => x.date === t && x.moment === m && x.grammage === g);
+  const statut = actuelle && actuelle.statut === demande ? '' : demande;
+  const sel = document.querySelector(`select.quantite[data-moment="${m}"][data-grammage="${g}"]`);
+  const q = sel ? Number(sel.value) : 1;
+  enregistrer('enregistrerPrise', { date: t, moment: m, grammage: g, statut, quantite: q }, () => {
+    donnees.Prises = donnees.Prises.filter(x => !(x.date === t && x.moment === m && x.grammage === g));
+    if (statut) donnees.Prises.push({ id: 'tmp-' + m + g + Date.now(), date: t, moment: m, grammage: g, quantite: q, statut });
   });
 }
 
-function fenetreKm(k) {
-  ouvrir({
-    titre: k ? 'Kilomètres de ' + k.personne + ' · ' + k.annee : 'Kilomètres ' + anneeImpots,
-    champs: [
-      { k: 'personne', label: 'Personne', type: 'liste', options: d.personnes, valeur: k ? k.personne : '', obligatoire: true },
-      { k: 'kmJour', label: 'Km par jour (aller-retour)', type: 'nombre', valeur: k ? k.kmJour : null },
-      { k: 'jours', label: 'Jours travaillés', type: 'nombre', valeur: k ? k.jours : null }
-    ],
-    supprimer: k ? () => effacer('Frais km', k.id) : null,
-    valider: v => sauver('Frais km', Object.assign({ annee: anneeImpots }, k || {}, v))
-  });
+function choisirJour() {
+  const champ = $('#choixJour');
+  if (champ.showPicker) champ.showPicker(); else champ.click();
 }
 
-// ====== Provisions ======
-
-/**
- * Montant mis de côté à la fin du mois donné : par mois × nombre de mois depuis le début.
- * Provision reliée à une charge : quand on coche cette charge, la facture est payée → le cumul retombe à 0
- * et repart le mois suivant. Sans charge reliée : le cumul s'arrête après le mois « Payée en ».
- */
-function provisionCumulee(pv, mois) {
-  if (!pv.mensuel || !pv.debut || mois < pv.debut) return 0;
-  let depart = pv.debut;
-  if (pv.charge) {
-    const payes = paiementsCoches(pv.charge).map(p => p.mois).filter(m => m >= pv.debut && m <= mois);
-    if (payes.length) {
-      const dernier = payes[payes.length - 1];
-      if (dernier === mois) return 0;
-      depart = ajouterMois(dernier, 1);
-    }
-  } else if (pv.fin && mois > pv.fin) return 0;
-  return r2(pv.mensuel * (moisEntre(depart, mois) + 1));
-}
-const nomCharge = id => (d.charges.find(x => x.id === id) || {}).intitule || '?';
-const echeanceProvision = pv => pv.charge
-  ? (pv.nom === nomCharge(pv.charge) ? 'reliée à sa charge' : 'payée par ' + nomCharge(pv.charge))
-  : pv.fin ? 'payée en ' + nomMois(pv.fin) : '';
-const totalProvisions = mois => r2((d.provisions || []).reduce((s, pv) => s + provisionCumulee(pv, mois), 0));
-
-function fenetreProvision(pv) {
-  ouvrir({
-    titre: pv ? pv.nom : 'Nouvelle provision',
-    texte: 'Une dépense payée plus tard (ex. l’eau en fin d’année) : tu mets de côté chaque mois, et ce qui est mis de côté s’ajoute au solde à garder sur le compte joint. Si tu choisis la charge qui la paie, le cumul retombe à zéro quand tu la coches dans l’onglet Mois.',
-    champs: [
-      { k: 'charge', label: 'Payée par', type: 'choix', valeur: pv ? pv.charge : '', options: [['', 'Aucune charge (mois de paiement ci-dessous)']].concat(
-        d.charges.filter(x => x.type === 'Charge' && (x.active || (pv && x.id === pv.charge)))
-          .sort((a, b) => String(a.intitule).localeCompare(b.intitule)).map(x => [x.id, x.intitule])) },
-      { k: 'nom', label: 'Nom (vide = nom de la charge)', valeur: pv ? pv.nom : '' },
-      { k: 'mensuel', label: 'À mettre de côté par mois (€)', type: 'montant', valeur: pv ? pv.mensuel : null, obligatoire: true },
-      { k: 'debut', label: 'À partir de', type: 'mois', valeur: pv ? pv.debut : d.mois, obligatoire: true },
-      { k: 'fin', label: 'Payée en (seulement sans charge)', type: 'mois', valeur: pv ? pv.fin : d.mois.slice(0, 4) + '-12' },
-      { k: 'note', label: 'Note', valeur: pv ? pv.note : '' }
-    ],
-    verifier: v => !v.nom && !v.charge ? '« Nom » est à remplir.'
-      : !v.charge && v.fin && v.fin < v.debut ? 'Le mois du paiement doit être après le début.' : '',
-    supprimer: pv ? () => { if (confirm('Supprimer la provision « ' + pv.nom + ' » ?')) effacer('Provisions', pv.id); } : null,
-    valider: v => sauver('Provisions', Object.assign({}, pv || {}, v, { nom: v.nom || nomCharge(v.charge) }))
-  });
-}
-
-/** Petite fenêtre d'information (pas de saisie). */
-function ouvrirInfo(titre, html, actions) {
-  fenetreCourante = { champs: [], valider: () => {} };
-  formulaire.innerHTML = `<h3>${esc(titre)}</h3>${html}
-    <div class="boutons">${actions || ''}<button type="button" class="bouton principal" data-action="f-annuler">Fermer</button></div>`;
-  if (!fenetre.open) fenetre.showModal();
-}
-
-/** Solde sur compte = reste à prélever du mois + provisions mises de côté. */
-function ouvrirSolde() {
-  const c = calculerMois(d.lignes, d.personnes, d.arrondi);
-  const liste = (d.provisions || []).map(pv => ({ pv, cumul: provisionCumulee(pv, d.mois) })).filter(x => x.cumul > 0);
-  const total = r2(c.joint.resteAPrelever + totalProvisions(d.mois));
-  ouvrirInfo('Solde sur compte · ' + nomMois(d.mois), `
-    <div class="recap">
-      <div class="recap-ligne"><span>Reste à prélever ce mois</span><b>${eur(c.joint.resteAPrelever)}</b></div>
-      <div class="recap-titre">Provisions</div>
-      ${liste.length ? liste.map(x => `<button type="button" class="recap-ligne sous" data-action="provision" data-id="${x.pv.id}">
-        <span>${esc(x.pv.nom)}<small>${eur(x.pv.mensuel)} / mois${x.pv.charge ? ' · ' + esc(echeanceProvision(x.pv)) : ''}</small></span><b>${eur(x.cumul)}</b></button>`).join('')
-        : '<div class="recap-ligne sous"><span>Aucune provision en cours</span></div>'}
-      <button type="button" class="lien" data-action="provision">+ Ajouter une provision</button>
-      <div class="recap-ligne total"><span>Solde à avoir sur le compte</span><b>${eur(total)}</b></div>
-    </div>`);
-}
-
-/** Reste en fin de mois : on peut l'augmenter (virements plus gros, à parts égales), jamais sous le montant calculé. */
-function fenetreEpargne() {
-  const c = calculerMois(d.lignes, d.personnes, d.arrondi);
-  const qui = d.personnes.filter(p => c.pers[p].ligne);
-  if (!qui.length) return;
-  const ecart = qui.reduce((s, p) => s + (c.pers[p].virement - c.pers[p].auto), 0);
-  const minimum = r2(c.joint.fin - ecart);
-  ouvrir({
-    titre: 'Épargne sur le compte joint',
-    texte: 'Ce qui reste sur le compte joint à la fin de ' + nomMois(d.mois) + '. Pour l’augmenter, les virements de '
-      + qui.join(' et ') + ' augmentent d’autant, à parts égales. Minimum : ' + eur(minimum) + ' (montant calculé).',
-    champs: [{ k: 'cible', label: 'Reste en fin de mois (€)', type: 'montant', valeur: c.joint.fin, obligatoire: true }],
-    verifier: v => v.cible < minimum - 0.004 ? 'Pas en dessous de ' + eur(minimum) + '.' : '',
-    libelleValider: 'Valider',
-    valider: v => {
-      const ajout = Math.round((v.cible - minimum) * 100);          // en centimes
-      qui.forEach((p, i) => {
-        const part = Math.floor(ajout / qui.length) + (i < ajout % qui.length ? 1 : 0);
-        const ligne = d.lignes.find(l => l.id === c.pers[p].ligne.id);
-        ligne.montant = ajout ? r2(c.pers[p].auto + part / 100) : null;   // 0 = retour au calcul automatique
-        sauver('Lignes', ligne);
-      });
-      rendre();
-    }
-  });
-}
-
-function ouvrirRecapImpots() {
-  const lignes = d.impots.filter(i => i.annee === anneeImpots);
-  const enfants = [...new Set(d.enfants.concat(lignes.map(i => i.pour).filter(Boolean)))];
-  const km = d.fraisKm.filter(k => k.annee === anneeImpots);
-  const personnes = [...new Set(d.personnes.concat(km.map(k => k.personne).filter(Boolean)))];
-  const nb = n => n.toLocaleString('fr-FR');
-  ouvrirInfo('Déclaration ' + anneeImpots, `<div class="recap">
-    ${enfants.map(e => {
-      const siens = lignes.filter(i => i.pour === e);
-      const rubriques = [...new Set(siens.map(i => i.rubrique))];
-      return `<div class="recap-ligne"><span>Somme ${esc(e)}${rubriques.length ? `<small>${rubriques.map(r =>
-        esc(r) + ' ' + eur(somme(siens.filter(i => i.rubrique === r)))).join(' · ')}</small>` : ''}</span><b>${eur(somme(siens))}</b></div>`;
-    }).join('')}
-    ${personnes.map(p => {
-      const total = km.filter(k => k.personne === p).reduce((s, k) => s + (k.kmJour || 0) * (k.jours || 0), 0);
-      const incomplet = km.some(k => k.personne === p && k.jours == null);
-      return `<div class="recap-ligne"><span>Frais réels ${esc(p)}<small>${incomplet ? 'jours travaillés à compléter' : 'kilomètres de l’année'}</small></span><b>${nb(total)} km</b></div>`;
-    }).join('')}
-  </div>`);
-}
-
-// ====== 3 touchers rapides sur le titre du mois : graphique ======
-
-let touchers = { n: 0, t: 0 };
-function toucherTitre() {
-  const maintenant = Date.now();
-  touchers.n = maintenant - touchers.t < 600 ? touchers.n + 1 : 1;
-  touchers.t = maintenant;
-  if (touchers.n >= 3) { touchers.n = 0; ouvrirGraphique(); }
-}
-
-// ====== Graphique des dépenses réelles ======
-
-/** Dépenses d'un mois : toutes les charges − les rentrées communes (CAF). */
-function depensesMois(lignes) {
-  return r2(lignes.reduce((s, l) => s + (l.type === 'Charge' ? Number(l.montant) || 0
-    : l.type === 'Rentrée' && l.partagee ? -(Number(l.montant) || 0) : 0), 0));
-}
-
-/** Dépenses par mois jusqu'au mois en cours ; le mois affiché est recalculé en direct. */
-function historiqueDepenses() {
-  const h = {};
-  (d.historique || []).forEach(x => { h[x.mois] = x.depenses; });
-  if (d.mois <= d.moisCourant && d.lignes.length) h[d.mois] = depensesMois(d.lignes);
-  return h;
-}
-
-function ouvrirGraphique(annee) {
-  const h = historiqueDepenses();
-  const annees = [...new Set(Object.keys(h).map(m => Number(m.slice(0, 4))))].sort();
-  if (!annees.length) annees.push(Number(d.moisCourant.slice(0, 4)));
-  if (!annee || annees.indexOf(annee) < 0) annee = annees.indexOf(Number(d.moisCourant.slice(0, 4))) >= 0
-    ? Number(d.moisCourant.slice(0, 4)) : annees[annees.length - 1];
-  fenetreCourante = { champs: [], valider: () => {} };
-  formulaire.innerHTML = `<div class="graph-tete"><h3>Dépenses réelles</h3>
-      <select id="annee-graph" aria-label="Année">${annees.map(a => `<option value="${a}" ${a === annee ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
-    <p class="aide" style="margin:0 0 10px">Toutes les dépenses du mois, moins la CAF. Arrondi à l’euro supérieur.</p>
-    <div id="graph">${graphiqueHtml(h, annee)}</div>
-    <div class="boutons"><button type="button" class="bouton principal" data-action="f-annuler">Fermer</button></div>`;
-  if (!fenetre.open) fenetre.showModal();
-}
-
-function graphiqueHtml(h, annee) {
-  const valeurs = MOIS_COURTS.map((_, i) => {
-    const m = annee + '-' + String(i + 1).padStart(2, '0');
-    return h[m] != null ? Math.max(0, Math.ceil(h[m])) : null;
-  });
-  const presentes = valeurs.filter(v => v != null);
-  if (!presentes.length) return '<p class="vide">Pas encore de données pour cette année.</p>';
-  const brut = Math.max(...presentes, 1);
-  const pas = [100, 250, 500, 1000, 2000, 2500, 5000, 10000].find(p => brut / p <= 4) || 20000;
-  const max = Math.ceil(brut / pas) * pas;
-  const L = 340, H = 220, g = 34, bas = 22, haut = 16, larg = (L - g) / 12;
-  const y = v => haut + (H - haut - bas) * (1 - v / max);
-  const nb = n => n.toLocaleString('fr-FR');
-  let svg = '';
-  for (let v = 0; v <= max; v += pas) {
-    svg += `<line x1="${g}" x2="${L}" y1="${y(v)}" y2="${y(v)}" class="g-grille"/>
-      <text x="${g - 5}" y="${y(v) + 3}" text-anchor="end" class="g-axe">${v >= 1000 ? nb(v / 1000) + ' k' : nb(v)}</text>`;
+// Lit un fichier et le prépare : photo réduite en JPEG, PDF tel quel
+function preparerFichier(f) {
+  if (f.size > TAILLE_MAX_DOC) return Promise.reject(new Error('Fichier trop volumineux (10 Mo maximum).'));
+  if (f.type === 'application/pdf') {
+    return new Promise((res, rej) => {
+      const lecteur = new FileReader();
+      lecteur.onload = () => res({ type: 'application/pdf', base64: lecteur.result.split(',')[1] });
+      lecteur.onerror = () => rej(new Error('Fichier illisible.'));
+      lecteur.readAsDataURL(f);
+    });
   }
-  const courant = d.moisCourant;
-  valeurs.forEach((v, i) => {
-    const x = g + i * larg, m = annee + '-' + String(i + 1).padStart(2, '0');
-    svg += `<text x="${x + larg / 2}" y="${H - 6}" text-anchor="middle" class="g-axe">${MOIS_COURTS[i].charAt(0).toUpperCase()}</text>`;
-    if (v == null) return;
-    const yy = y(v);
-    svg += `<rect x="${x + larg * 0.18}" y="${yy}" width="${larg * 0.64}" height="${Math.max(0, H - bas - yy)}" rx="4" class="${m === courant ? 'g-barre actuelle' : 'g-barre'}"/>
-      <text x="${x + larg / 2}" y="${yy - 4}" text-anchor="middle" class="g-valeur">${nb(v)}</text>`;
-  });
-  const total = presentes.reduce((s, v) => s + v, 0);
-  return `<svg viewBox="0 0 ${L} ${H}" class="graphique" role="img" aria-label="Dépenses réelles par mois en ${annee}">${svg}</svg>
-    <div class="g-resume"><span>Total ${annee}<b>${nb(total)} €</b></span><span>Moyenne par mois<b>${nb(Math.ceil(total / presentes.length))} €</b></span></div>`;
-}
-
-document.addEventListener('change', e => {
-  if (e.target.id === 'annee-graph') ouvrirGraphique(Number(e.target.value));
-});
-
-/** Tout est coché : on propose de clôturer le mois, puis on passe au suivant. */
-function proposerCloture(mois) {
-  const suivant = ajouterMois(mois, 1);
-  ouvrir({
-    titre: 'Clôturer ' + nomMois(mois) + ' ?',
-    texte: 'Tout est coché. Une fois clôturé, le mois ne sera plus modifiable et l’appli passera à ' + nomMois(suivant) + '.',
-    champs: [],
-    libelleAnnuler: 'Plus tard',
-    libelleValider: 'Clôturer',
-    valider: () => serveur('cloturer', { mois, suivant })
+  if (!f.type.startsWith('image/')) return Promise.reject(new Error('Format non accepté : choisissez une photo ou un PDF.'));
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(f);
+    img.onload = () => {
+      const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res({ type: 'image/jpeg', base64: c.toDataURL('image/jpeg', 0.85).split(',')[1] });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Image illisible.')); };
+    img.src = url;
   });
 }
 
-// ====== Clics ======
-
-document.addEventListener('click', e => {
-  const b = e.target.closest('[data-action]');
-  if (!b || b.disabled) return;
-  const id = b.dataset.id, trouve = (liste) => liste.find(x => x.id === id);
-  switch (b.dataset.action) {
-    case 'onglet': onglet = b.dataset.k; rendre(); window.scrollTo(0, 0); break;
-    case 'mois': charger(b.dataset.m); break;
-    case 'rafraichir':
-      if (!d) document.getElementById('vue').innerHTML = '<p class="vide">Chargement…</p>';
-      charger(d ? d.mois : '');
-      break;
-    case 'pointer': {
-      if (cloture(d.mois)) break;
-      const l = trouve(d.lignes);
-      l.passee = !l.passee;
-      rendre();
-      sauver('Lignes', l);
-      if (l.passee && toutCoche()) proposerCloture(d.mois);
-      break;
-    }
-    case 'cloturer': proposerCloture(d.mois); break;
-    case 'graphique': ouvrirGraphique(); break;
-    case 'titre-mois': toucherTitre(); break;
-    case 'solde': ouvrirSolde(); break;
-    case 'epargne': fenetreEpargne(); break;
-    case 'provision': fenetreProvision(id ? (d.provisions || []).find(x => x.id === id) : null); break;
-    case 'recap-impots': ouvrirRecapImpots(); break;
-    case 'rouvrir':
-      if (confirm('Rouvrir ' + nomMois(d.mois) + ' ? Il redeviendra modifiable.')) serveur('rouvrir', { mois: d.mois });
-      break;
-    case 'charge': fenetreCharge(trouve(d.charges)); break;
-    case 'ajouter-charge': fenetreCharge(null, b.dataset.compte); break;
-    case 'ajouter-salaire': fenetreCharge(null, b.dataset.compte, { type: 'Rentrée', intitule: 'Salaire ' + b.dataset.compte }); break;
-    case 'versement': fenetreVersement(trouve(d.versements), null); break;
-    case 'ajouter-versement': fenetreVersement(null, b.dataset.epargne); break;
-    case 'impot-ajout': fenetreImpot(null, b.dataset.pour, b.dataset.rubrique); break;
-    case 'credit': fenetreCredit(id ? trouve(d.credits) : null); break;
-    case 'echeancier': ouverts.has(id) ? ouverts.delete(id) : ouverts.add(id); rendre(); break;
-    case 'impot': fenetreImpot(trouve(d.impots)); break;
-    case 'km': fenetreKm(id ? trouve(d.fraisKm) : null); break;
-    case 'annee': anneeImpots = Number(b.dataset.a); rendre(); break;
-    case 'annee-plus': anneeImpots = Math.max(anneeImpots, Number(d.moisCourant.slice(0, 4))) + 1; rendre(); break;
-    case 'f-annuler': fenetre.close(); break;
-    case 'f-supprimer': fenetre.close(); fenetreCourante.supprimer(); break;
+async function envoyerDocument(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const info = $('#infoDoc');
+  info.textContent = 'Envoi en cours…';
+  info.hidden = false;
+  try {
+    const { type, base64 } = await preparerFichier(f);
+    await appeler('ajouterDocument', { date: donnees.aujourdhui, nom: f.name, type, contenu: base64 });
+    info.hidden = true;
+    input.value = '';
+    await charger();
+  } catch (e) {
+    info.hidden = true;
+    afficherErreur(e.message || 'Envoi impossible.');
+    input.value = '';
   }
-});
+}
 
-// Retour dans l'appli après un moment : on récupère ce que les autres ont pu changer.
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && d && !enCours && !fenetre.open
-      && Date.now() - derniereMaj > 30000) charger(d.mois);
-});
+function ajouterNoteDepuisChamp() {
+  const champ = $('#champNote');
+  const texte = champ.value.trim();
+  if (!texte) return;
+  champ.value = '';
+  const date = donnees.aujourdhui;
+  enregistrer('ajouterNote', { date, texte, auteur: '' }, () => {
+    donnees.Notes.push({ id: 'tmp-' + Date.now(), date, texte, auteur: '' });
+  });
+}
 
-// ====== Démarrage ======
+function supprimerElement(table, id) {
+  if (!confirm('Supprimer cette ligne ?')) return;
+  enregistrer('supprimer', { table, ids: [id] }, () => {
+    donnees[table] = donnees[table].filter(x => x.id !== id);
+  });
+}
+
+const ACTIONS_UI = {
+  'ajout-securite': ouvrirSecurite,
+  'ajout-rdv': ouvrirRdv,
+  'suppr-doc': b => supprimerElement('Documents', b.dataset.id),
+  'statut': changerStatut,
+  'choisir-jour': choisirJour,
+  'jour-aujourdhui': () => { dateVue = null; rendre(); },
+  'ajout-stock': ouvrirAjoutStock,
+  'modifier-plan': ouvrirModifierPlan,
+  'nouvelle-ordonnance': ouvrirNouvelleOrdonnance,
+  'ajout-note': ajouterNoteDepuisChamp,
+  'suppr-note': b => supprimerElement('Notes', b.dataset.id),
+  'suppr-stock': b => supprimerElement('Stock', b.dataset.id),
+  'suppr-plan': b => supprimerElement('Plans', b.dataset.id)
+};
+
+// ---------- Démarrage et événements ----------
 
 function demarrer() {
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(API)) {
-    afficherMessage('Adresse du serveur manquante',
-      'Colle l’adresse /exec du déploiement Apps Script dans index.html, à la ligne « const API = … ».', false);
-    return;
+  const cache = lire(CLE_CACHE);
+  if (cache) {
+    try { donnees = JSON.parse(cache); } catch (e) { donnees = null; }
   }
-  if (!stock.lire(CLE_CODE)) { demanderCode(''); return; }
-  // Affichage immédiat des dernières données connues, puis mise à jour depuis le Sheet
-  const cache = stock.lire(CLE_CACHE);
-  if (cache) { try { d = JSON.parse(cache); rendre(); } catch (e) { d = null; } }
-  if (!d) document.getElementById('vue').innerHTML = '<p class="vide">Chargement…</p>';
+  if (!lire(CLE_CODE)) { montrerAccueil(); return; }
+  montrerAppli();
+  rendre();
   charger();
 }
+
+$('#formCode').addEventListener('submit', async e => {
+  e.preventDefault();
+  const code = $('#champCode').value.trim();
+  $('#erreurCode').textContent = 'Vérification…';
+  try {
+    const d = await envoyer('donnees', {}, code);
+    ecrire(CLE_CODE, code);
+    donnees = d;
+    derniereMaj = Date.now();
+    ecrire(CLE_CACHE, JSON.stringify(d));
+    montrerAppli();
+    rendre();
+  } catch (err) {
+    $('#erreurCode').textContent = err.codeInvalide ? 'Code refusé. Vérifiez-le et réessayez.' : err.message;
+  }
+});
+
+$('#contenu').addEventListener('click', e => {
+  const b = e.target.closest('[data-action]');
+  if (!b || b.disabled) return;
+  const f = ACTIONS_UI[b.dataset.action];
+  if (f) f(b);
+});
+
+$('#contenu').addEventListener('change', e => {
+  if (e.target.id === 'fichierDoc') { envoyerDocument(e.target); return; }
+  if (e.target.id !== 'choixJour' || !e.target.value) return;
+  const choisi = e.target.value;
+  dateVue = choisi === donnees.aujourdhui ? null : choisi;
+  rendre();
+});
+
+$('#contenu').addEventListener('change', e => {
+  const sel = e.target.closest('select.quantite');
+  if (sel) enregistrerQuantite(sel);
+});
+
+$('#reessayer').addEventListener('click', () => charger());
+window.addEventListener('hashchange', () => { dateVue = null; rendre(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && donnees && Date.now() - derniereMaj > 30000 && !$('#dlg').open) {
+    charger();
+  }
+});
+
 demarrer();
 </script>
 </body>
